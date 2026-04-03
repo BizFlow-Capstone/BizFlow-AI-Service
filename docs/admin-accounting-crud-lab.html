@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BizFlow Admin — Accounting Lab (Full CRUD)</title>
+    <style>
+        :root { --bg:#0b1020; --panel:#131a2e; --line:#253052; --txt:#e7ecff; --muted:#9aa8d6; --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; --accent:#2e4fff; --accent2:#7c3aed; }
+        * { box-sizing:border-box; }
+        body { margin:0; font-family:'Segoe UI',Arial,sans-serif; background:linear-gradient(120deg,#0b1020,#131a2e 45%,#0f1630); color:var(--txt); font-size:13px; }
+        .wrap { max-width:1500px; margin:0 auto; padding:12px; }
+        .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:10px; }
+        h1 { font-size:20px; margin:0 0 8px; }
+        h2 { font-size:15px; margin:0 0 8px; color:var(--ok); }
+        h3 { font-size:13px; margin:0 0 6px; }
+        .row { display:flex; gap:8px; flex-wrap:wrap; }
+        .col { flex:1 1 200px; }
+        label { font-size:11px; color:var(--muted); display:block; margin-bottom:3px; }
+        input,textarea,select { width:100%; background:#0f1630; color:var(--txt); border:1px solid var(--line); border-radius:6px; padding:6px 8px; font-size:12px; }
+        textarea { min-height:70px; font-family:Consolas,monospace; }
+        button { background:var(--accent); color:white; border:none; padding:7px 12px; border-radius:6px; cursor:pointer; font-size:12px; margin:2px; }
+        button:hover { filter:brightness(1.2); }
+        button.alt { background:#334155; }
+        button.warn { background:#7c2d12; }
+        button.ok { background:#166534; }
+        button.purple { background:var(--accent2); }
+        .actions { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+        .muted { color:var(--muted); font-size:11px; }
+        .log { max-height:350px; overflow:auto; background:#0a1022; border:1px solid var(--line); border-radius:6px; padding:8px; font-family:Consolas,monospace; font-size:11px; white-space:pre-wrap; }
+        .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:8px; margin-bottom:10px; }
+        .kpi { background:#0f1630; border:1px solid var(--line); border-radius:8px; padding:8px; }
+        .kpi .label { color:var(--muted); font-size:10px; text-transform:uppercase; }
+        .kpi .value { font-size:16px; font-weight:700; margin-top:2px; }
+        .table-wrap { max-height:280px; overflow:auto; border:1px solid var(--line); border-radius:6px; }
+        table { width:100%; border-collapse:collapse; font-size:11px; }
+        th,td { border-bottom:1px solid var(--line); padding:5px 6px; text-align:left; vertical-align:top; }
+        th { color:var(--muted); font-size:10px; text-transform:uppercase; position:sticky; top:0; background:var(--panel); z-index:1; }
+        tr.clickable { cursor:pointer; }
+        tr.clickable:hover { background:rgba(46,79,255,.15); }
+        tr.selected { background:rgba(34,197,94,.15); }
+        .diff-add { background:rgba(34,197,94,.12); }
+        .diff-del { background:rgba(239,68,68,.12); }
+        .tabs { display:flex; gap:3px; margin-bottom:8px; flex-wrap:wrap; }
+        .tab { padding:6px 14px; border-radius:6px 6px 0 0; cursor:pointer; background:#0f1630; border:1px solid var(--line); border-bottom:none; color:var(--muted); font-size:12px; white-space:nowrap; }
+        .tab.active { background:var(--panel); color:var(--ok); font-weight:600; }
+        .tab-content { display:none; }
+        .tab-content.active { display:block; }
+        .tree { padding-left:14px; border-left:2px solid var(--line); margin-left:6px; }
+        .tree-node { padding:4px 0; }
+        .badge { display:inline-block; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:600; }
+        .badge.active { background:#166534; color:#86efac; }
+        .badge.draft { background:#3b1f1f; color:#fca5a5; }
+        .badge.literal { background:#1e3a5f; color:#60a5fa; }
+        .badge.ref { background:#3b1f5e; color:#c084fc; }
+        .badge.aggregate { background:#1f3b1f; color:#86efac; }
+        .badge.lookup { background:#3b3b1f; color:#fde047; }
+        .badge.op { background:#3b1f1f; color:#fca5a5; }
+        .badge.fn { background:#1f3b3b; color:#67e8f9; }
+        .badge.context { background:#2d2d2d; color:#d4d4d4; }
+        .node-value { font-weight:700; margin-left:6px; }
+        .node-debug { color:var(--err); font-size:11px; margin-left:6px; }
+        .schema-card { background:#0f1630; border:1px solid var(--line); border-radius:6px; padding:8px; margin-bottom:6px; }
+        .schema-card h4 { margin:0 0 4px; font-size:12px; color:var(--ok); }
+        .schema-field { font-size:11px; padding:1px 0; }
+        .schema-field .fname { color:#60a5fa; font-weight:600; }
+        .schema-field .ftype { color:var(--muted); }
+        .schema-field .freq { color:var(--err); font-size:10px; }
+        .inline-form { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:6px; }
+        .sub-panel { background:#0a1022; border:1px solid var(--line); border-radius:6px; padding:10px; margin-top:8px; }
+        .copy-btn { font-size:10px; padding:2px 6px; background:#334155; }
+        details { margin-bottom:6px; }
+        summary { cursor:pointer; color:var(--muted); font-size:12px; padding:4px; }
+        summary:hover { color:var(--txt); }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <h1>🧪 Admin Accounting Lab — Full CRUD</h1>
+
+    <!-- Config -->
+    <div class="card">
+        <div class="row">
+            <div class="col"><label>Base URL</label><input id="baseUrl" value="http://localhost:7270" /></div>
+            <div class="col"><label>Bearer Token</label><input id="token" placeholder="eyJ..." /></div>
+            <div class="col" style="flex:0 0 auto; align-self:flex-end;">
+                <button onclick="loadAll()">🔄 Load All</button>
+                <button class="alt" onclick="$('log').textContent=''">Clear Log</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab('tabOverview',this)">📊 Overview</div>
+        <div class="tab" onclick="switchTab('tabVersion',this)">📋 Version</div>
+        <div class="tab" onclick="switchTab('tabFormula',this)">🧮 Formulas</div>
+        <div class="tab" onclick="switchTab('tabMapping',this)">🔗 Mappings</div>
+        <div class="tab" onclick="switchTab('tabRowDef',this)">📐 RowDefs</div>
+        <div class="tab" onclick="switchTab('tabEntity',this)">🗂️ Entities</div>
+        <div class="tab" onclick="switchTab('tabRef',this)">📖 Reference</div>
+        <div class="tab" onclick="switchTab('tabCompare',this)">⚖️ Compare</div>
+        <div class="tab" onclick="switchTab('tabTrace',this)">🔍 Trace</div>
+        <div class="tab" onclick="switchTab('tabSchema',this)">🧩 Schema</div>
+        <div class="tab" onclick="switchTab('tabBizType',this)">🏢 BusinessTypes</div>
+    </div>
+
+    <!-- ═══ TAB: Overview ═══ -->
+    <div id="tabOverview" class="tab-content active">
+        <div class="card">
+            <h2>📊 Overview</h2>
+            <div class="actions"><button onclick="loadOverview()">Load Overview</button></div>
+            <div class="row" style="margin-top:8px;">
+                <div class="col">
+                    <h3>Templates & Versions</h3>
+                    <div class="table-wrap">
+                        <table><thead><tr><th>ID</th><th>Code</th><th>Name</th><th>Active</th><th>Versions</th></tr></thead>
+                        <tbody id="ovTemplates"><tr><td colspan="5" class="muted">Click Load</td></tr></tbody></table>
+                    </div>
+                </div>
+                <div class="col" style="flex:0 0 280px;">
+                    <h3>Tax Rulesets</h3>
+                    <div class="table-wrap">
+                        <table><thead><tr><th>ID</th><th>Code</th><th>Active</th><th>Groups</th><th>Rates</th></tr></thead>
+                        <tbody id="ovRulesets"><tr><td colspan="5" class="muted">—</td></tr></tbody></table>
+                    </div>
+                </div>
+            </div>
+            <div class="row" style="margin-top:8px;">
+                <div class="col">
+                    <h3>Formulas (<span id="ovFCount">0</span>)</h3>
+                    <div class="table-wrap" style="max-height:200px;">
+                        <table><thead><tr><th>ID</th><th>Code</th><th>Name</th><th>Type</th><th>Active</th><th></th></tr></thead>
+                        <tbody id="ovFormulas"><tr><td colspan="6" class="muted">—</td></tr></tbody></table>
+                    </div>
+                </div>
+                <div class="col" style="flex:0 0 260px;">
+                    <h3>Business Types</h3>
+                    <div class="table-wrap" style="max-height:200px;">
+                        <table><thead><tr><th>Code</th><th>Name</th><th>ID (short)</th></tr></thead>
+                        <tbody id="ovBizTypes"><tr><td colspan="3" class="muted">—</td></tr></tbody></table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ TAB: Version ═══ -->
+    <div id="tabVersion" class="tab-content">
+        <div class="card">
+            <h2>📋 Template Version Manager</h2>
+            <div class="row">
+                <div class="col"><label>Version ID</label><input id="tvId" type="number" /></div>
+                <div class="col" style="flex:2;"><label>Quick Select</label><select id="tvQuick" onchange="$('tvId').value=this.value"></select></div>
+            </div>
+            <div class="actions">
+                <button onclick="tvDetail()">View Detail</button>
+                <button onclick="tvFull()">Full Structure</button>
+                <button class="purple" onclick="tvClone()">Clone → Draft</button>
+                <button class="ok" onclick="tvActivate()">Activate</button>
+                <button class="alt" onclick="tvDeactivate()">Deactivate</button>
+                <button class="warn" onclick="tvDelete()">Delete Draft</button>
+            </div>
+            <details style="margin-top:8px;">
+                <summary>✏️ Update Version Metadata</summary>
+                <div class="sub-panel">
+                    <div class="inline-form">
+                        <div><label>Version Label</label><input id="tvLabel" /></div>
+                        <div><label>Effective From</label><input id="tvEffective" placeholder="YYYY-MM-DD" /></div>
+                    </div>
+                    <div><label>Change Notes</label><textarea id="tvNotes" rows="2"></textarea></div>
+                    <button onclick="tvUpdate()">💾 Save</button>
+                </div>
+            </details>
+            <div id="tvResult" class="log" style="margin-top:8px;min-height:60px;"></div>
+        </div>
+    </div>
+
+    <!-- ═══ TAB: Formulas ═══ -->
+    <div id="tabFormula" class="tab-content">
+        <div class="card">
+            <h2>🧮 Formula Manager</h2>
+            <div class="row">
+                <div class="col"><label>Formula ID</label><input id="fmId" type="number" /></div>
+                <div class="col" style="flex:2;"><label>Quick Select</label><select id="fmQuick" onchange="if(this.value){$('fmId').value=this.value;fmDetail();}"></select></div>
+            </div>
+            <div class="actions">
+                <button onclick="fmDetail()">Get Detail + Explanation</button>
+                <button class="purple" onclick="fmClone()">Clone Formula</button>
+            </div>
+            <!-- Info -->
+            <div class="row" style="margin-top:8px;">
+                <div class="col">
+                    <div class="kpis">
+                        <div class="kpi"><div class="label">Code</div><div id="fmCode" class="value" style="font-size:13px;">—</div></div>
+                        <div class="kpi"><div class="label">Type</div><div id="fmType" class="value" style="font-size:13px;">—</div></div>
+                        <div class="kpi"><div class="label">Active</div><div id="fmActive" class="value" style="font-size:13px;">—</div></div>
+                    </div>
+                    <h3>💡 Explanation</h3>
+                    <div id="fmExplanation" class="log" style="min-height:40px;font-size:13px;color:var(--ok);"></div>
+                </div>
+                <div class="col">
+                    <h3>ExpressionJson (current)</h3>
+                    <div id="fmJsonView" class="log" style="min-height:80px;"></div>
+                </div>
+            </div>
+            <!-- Update -->
+            <details style="margin-top:8px;" open>
+                <summary>✏️ Update Formula (for testing)</summary>
+                <div class="sub-panel">
+                    <div class="inline-form">
+                        <div><label>Name</label><input id="fmName" /></div>
+                        <div><label>Formula Type</label>
+                            <select id="fmFType"><option value="">— keep —</option><option>aggregation</option><option>cell_ref</option><option>tax_rate</option><option>lookup</option><option>composite</option><option>threshold</option></select>
+                        </div>
+                        <div><label>Is Active</label>
+                            <select id="fmIsActive"><option value="">— keep —</option><option value="true">Yes</option><option value="false">No</option></select>
+                        </div>
+                    </div>
+                    <div><label>Description</label><input id="fmDesc" /></div>
+                    <div><label>ExpressionJson (editable)</label>
+                        <textarea id="fmExprJson" rows="6"></textarea>
+                    </div>
+                    <div class="actions">
+                        <button onclick="fmUpdate()">💾 Save Formula</button>
+                        <button class="alt" onclick="fmFormat()">Format JSON</button>
+                        <button class="alt" onclick="fmValidate()">Validate</button>
+                    </div>
+                </div>
+            </details>
+            <details><summary>📋 Clone Settings</summary>
+                <div class="sub-panel inline-form">
+                    <div><label>New Code</label><input id="fmCloneCode" placeholder="S2A_SUBTOTAL_V2" /></div>
+                    <div><label>Name Suffix</label><input id="fmCloneSuffix" value=" (draft)" /></div>
+                </div>
+            </details>
+        </div>
+    </div>
+
+    <!-- ═══ TAB: Field Mappings ═══ -->
+    <div id="tabMapping" class="tab-content">
+        <div class="card">
+            <h2>🔗 Field Mapping Manager</h2>
+            <div class="row">
+                <div class="col"><label>Template Version ID</label><input id="fldVer" type="number" /></div>
+                <div class="col"><button style="margin-top:16px;" onclick="fldLoad()">Load Mappings</button></div>
+            </div>
+            <div class="table-wrap" style="margin-top:8px;">
+                <table>
+                    <thead><tr><th>ID</th><th>FieldCode</th><th>Label</th><th>Type</th><th>Source</th><th>Entity</th><th>Field</th><th>Agg</th><th>Formula</th><th>Sort</th><th></th></tr></thead>
+                    <tbody id="fldTable"><tr><td colspan="11" class="muted">Load a version</td></tr></tbody>
+                </table>
+            </div>
+            <details style="margin-top:8px;">
+                <summary>➕ Create / ✏️ Update Field Mapping</summary>
+                <div class="sub-panel">
+                    <div class="muted">Mapping ID (empty=Create): <input id="fldEditId" type="number" style="width:80px;display:inline;" /></div>
+                    <div class="inline-form">
+                        <div><label>Field Code</label><input id="fldCode" /></div>
+                        <div><label>Field Label</label><input id="fldLabel" /></div>
+                        <div><label>Field Type</label><select id="fldType"><option>decimal</option><option>string</option><option>date</option><option>long</option></select></div>
+                        <div><label>Source Type</label><select id="fldSrc" onchange="fldSrcChg()"><option>query</option><option>formula</option><option>static</option><option>auto</option></select></div>
+                    </div>
+                    <div id="fldQueryGrp" class="inline-form">
+                        <div><label>Source Entity ID</label><input id="fldEntId" type="number" /></div>
+                        <div><label>Source Field ID</label><input id="fldFldId" type="number" /></div>
+                        <div><label>Filter JSON</label><input id="fldFilter" /></div>
+                        <div><label>Aggregation</label><select id="fldAgg"><option value="">none</option><option>SUM</option><option>AVG</option><option>COUNT</option></select></div>
+                    </div>
+                    <div id="fldFormulaGrp" class="inline-form" style="display:none;">
+                        <div><label>Formula ID</label><input id="fldFormId" type="number" /></div>
+                        <div><label>Formula Expression</label><input id="fldFormExpr" /></div>
+                    </div>
+                    <div class="inline-form">
+                        <div><label>Sort Order</label><input id="fldSort" type="number" value="0" /></div>
+                        <div><label>Is Required</label><select id="fldReq"><option value="false">No</option><option value="true">Yes</option></select></div>
+                    </div>
+                    <div class="actions">
+                        <button onclick="fldCreate()">➕ Create</button>
+                        <button class="ok" onclick="fldUpdate()">💾 Update</button>
+                        <button class="warn" onclick="fldDelete()">🗑️ Delete</button>
+                        <button class="alt" onclick="fldClear()">Clear</button>
+                    </div>
+                </div>
+            </details>
+        </div>
+    </div>
+
+    <!-- ═══ TAB: Row Definitions ═══ -->
+    <div id="tabRowDef" class="tab-content">
+        <div class="card">
+            <h2>📐 Row Definition Manager</h2>
+            <div class="row">
+                <div class="col"><label>Template Version ID</label><input id="rdVer" type="number" /></div>
+                <div class="col"><button style="margin-top:16px;" onclick="rdLoad()">Load RowDefs</button></div>
+            </div>
+            <div class="table-wrap" style="margin-top:8px;">
+                <table>
+                    <thead><tr><th>ID</th><th>RowType</th><th>Label</th><th>Position</th><th>Sort</th><th>Section</th><th>GroupBy</th><th>Formula</th><th>TaxType</th><th></th></tr></thead>
+                    <tbody id="rdTable"><tr><td colspan="10" class="muted">Load a version</td></tr></tbody>
+                </table>
+            </div>
+            <details style="margin-top:8px;">
+                <summary>➕ Create / ✏️ Update Row Definition</summary>
+                <div class="sub-panel">
+                    <div class="muted">RowDef ID (empty=Create): <input id="rdEditId" type="number" style="width:80px;display:inline;" /></div>
+                    <div class="inline-form">
+                        <div><label>Row Type</label><select id="rdRowType"><option>data_placeholder</option><option>industry_header</option><option>subtotal</option><option>tax_line</option><option>grand_total</option><option>section_header</option><option>balance_row</option><option>opening_balance</option><option>closing_balance</option></select></div>
+                        <div><label>Row Label</label><input id="rdLabel" /></div>
+                        <div><label>Position</label><select id="rdPos"><option>per_group</option><option>end_of_book</option><option>per_section</option></select></div>
+                        <div><label>Sort Order</label><input id="rdSort" type="number" value="100" /></div>
+                    </div>
+                    <div class="inline-form">
+                        <div><label>Section Type</label><select id="rdSecType"><option value="">— none —</option><option>industry_group</option><option>revenue_section</option><option>cost_section</option><option>tax_section</option><option>summary_section</option></select></div>
+                        <div><label>Section Filter</label><input id="rdSecFilter" /></div>
+                        <div><label>GroupBy Field</label><input id="rdGroupBy" /></div>
+                        <div><label>Formula ID</label><input id="rdFormId" type="number" /></div>
+                    </div>
+                    <div class="inline-form">
+                        <div><label>Tax Type</label><select id="rdTaxType"><option value="">— none —</option><option>vat</option><option>pit</option></select></div>
+                        <div><label>Visible Fields (JSON)</label><input id="rdVisFields" placeholder='["stt","revenue"]' /></div>
+                    </div>
+                    <div class="actions">
+                        <button onclick="rdCreate()">➕ Create</button>
+                        <button class="ok" onclick="rdUpdate()">💾 Update</button>
+                        <button class="warn" onclick="rdDel()">🗑️ Delete</button>
+                        <button class="alt" onclick="rdClear()">Clear</button>
+                    </div>
+                </div>
+            </details>
+        </div>
+    </div>
+
+    <!-- ═══ TAB: Entities ═══ -->
+    <div id="tabEntity" class="tab-content">
+        <div class="card">
+            <h2>🗂️ Mappable Entities & Fields</h2>
+            <div class="actions"><button onclick="entLoad()">Load Entities</button></div>
+            <div class="row" style="margin-top:8px;">
+                <div class="col">
+                    <h3>Entities</h3>
+                    <div class="table-wrap" style="max-height:200px;">
+                        <table><thead><tr><th>ID</th><th>Code</th><th>Name</th><th>Cat</th><th>Active</th><th>Fields</th><th></th></tr></thead>
+                        <tbody id="entTable"><tr><td colspan="7" class="muted">Click Load</td></tr></tbody></table>
+                    </div>
+                </div>
+                <div class="col">
+                    <h3>Fields of entity <strong id="entSelectedName">—</strong></h3>
+                    <div class="table-wrap" style="max-height:200px;">
+                        <table><thead><tr><th>ID</th><th>Code</th><th>Name</th><th>Type</th><th>Aggs</th><th>Active</th><th></th></tr></thead>
+                        <tbody id="entFldTable"><tr><td colspan="7" class="muted">Select entity</td></tr></tbody></table>
+                    </div>
+                </div>
+            </div>
+            <details style="margin-top:8px;">
+                <summary>➕ Create / ✏️ Update Entity</summary>
+                <div class="sub-panel">
+                    <div class="muted">Entity ID: <input id="entEditId" type="number" style="width:80px;display:inline;" /></div>
+                    <div class="inline-form">
+                        <div><label>Code</label><input id="entCode" /></div>
+                        <div><label>Display Name</label><input id="entName" /></div>
+                        <div><label>Category</label><select id="entCat"><option>revenue</option><option>cost</option><option>tax</option><option>asset</option></select></div>
+                    </div>
+                    <div><label>Description</label><input id="entDesc" /></div>
+                    <div class="actions">
+                        <button onclick="entCreate()">➕ Create</button>
+                        <button class="ok" onclick="entUpdate()">💾 Update</button>
+                    </div>
+                </div>
+            </details>
+            <details>
+                <summary>➕ Create / ✏️ Update Field</summary>
+                <div class="sub-panel">
+                    <div class="muted">Field ID: <input id="efEditId" type="number" style="width:80px;display:inline;" /> | Entity ID: <input id="efEntId" type="number" style="width:80px;display:inline;" /></div>
+                    <div class="inline-form">
+                        <div><label>Code</label><input id="efCode" /></div>
+                        <div><label>Display Name</label><input id="efName" /></div>
+                        <div><label>Data Type</label><select id="efDtype"><option>decimal</option><option>string</option><option>date</option><option>long</option><option>guid</option></select></div>
+                    </div>
+                    <div class="inline-form">
+                        <div><label>Allowed Aggregations</label><input id="efAggs" value='["sum","none"]' /></div>
+                        <div><label>Description</label><input id="efDesc" /></div>
+                    </div>
+                    <div class="actions">
+                        <button onclick="efCreate()">➕ Create Field</button>
+                        <button class="ok" onclick="efUpdate()">💾 Update Field</button>
+                    </div>
+                </div>
+            </details>
+        </div>
+    </div>
+
+    <!-- ═══ TAB: Reference ═══ -->
+    <div id="tabRef" class="tab-content">
+        <div class="card">
+            <h2>📖 Reference (Enriched)</h2>
+            <div class="actions"><button onclick="loadRef()">Load Reference</button></div>
+            <div id="refGrid" class="row" style="margin-top:8px;"></div>
+        </div>
+    </div>
+
+    <!-- ═══ TAB: Compare ═══ -->
+    <div id="tabCompare" class="tab-content">
+        <div class="card">
+            <h2>⚖️ Compare Active vs Draft</h2>
+            <div class="row">
+                <div class="col"><label>LocationId</label><input id="cmpLoc" type="number" value="6" /></div>
+                <div class="col"><label>PeriodId</label><input id="cmpPer" type="number" value="1" /></div>
+                <div class="col"><label>Draft VersionId</label><input id="cmpDraft" type="number" /></div>
+                <div class="col"><label>Active VersionId</label><input id="cmpActive" type="number" /></div>
+            </div>
+            <div class="row">
+                <div class="col"><label>GroupNumber</label><input id="cmpGrp" type="number" value="2" /></div>
+                <div class="col"><label>TaxMethod</label><input id="cmpMeth" value="method_1" /></div>
+                <div class="col"><label>RulesetId</label><input id="cmpRule" type="number" value="1" /></div>
+                <div class="col"><label>BatchSize</label><input id="cmpBatch" type="number" value="20" /></div>
+            </div>
+            <label>BusinessTypeIds (comma GUIDs)</label><input id="cmpBiz" />
+            <div class="actions"><button onclick="runCompare()">▶ Run Compare</button></div>
+            <div style="margin-top:10px;">
+                <h3>Value Changes</h3>
+                <div class="table-wrap"><table><thead><tr><th>Code</th><th>Before</th><th>After</th><th>Δ</th></tr></thead>
+                <tbody id="cmpDiff"><tr><td colspan="4" class="muted">—</td></tr></tbody></table></div>
+            </div>
+            <div class="row" style="margin-top:8px;">
+                <div class="col"><h3>Active Summary</h3><div id="cmpActSum" class="log" style="min-height:50px;"></div></div>
+                <div class="col"><h3>Draft Summary</h3><div id="cmpDftSum" class="log" style="min-height:50px;"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ TAB: Trace ═══ -->
+    <div id="tabTrace" class="tab-content">
+        <div class="card">
+            <h2>🔍 Formula Trace</h2>
+            <div class="row">
+                <div class="col"><label>Formula ID</label><input id="trFId" type="number" /></div>
+                <div class="col"><label>LocationId</label><input id="trLoc" type="number" value="6" /></div>
+                <div class="col"><label>PeriodId</label><input id="trPer" type="number" value="1" /></div>
+                <div class="col"><label>RulesetId</label><input id="trRule" type="number" value="1" /></div>
+            </div>
+            <label>BusinessTypeIds</label><input id="trBiz" />
+            <div class="actions"><button onclick="runTrace()">▶ Run Trace</button></div>
+            <div style="margin-top:10px;">
+                <div class="kpis">
+                    <div class="kpi"><div class="label">Formula</div><div id="trCode" class="value" style="font-size:13px;">—</div></div>
+                    <div class="kpi"><div class="label">Final Value</div><div id="trVal" class="value">—</div></div>
+                </div>
+                <h3>Execution Tree</h3>
+                <div id="trTree" class="log" style="min-height:80px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ TAB: Node Schema ═══ -->
+    <div id="tabSchema" class="tab-content">
+        <div class="card">
+            <h2>🧩 Formula Node Schemas</h2>
+            <div class="actions"><button onclick="loadSchemas()">Load Schemas</button></div>
+            <div id="schemaGrid" style="margin-top:8px;"></div>
+        </div>
+    </div>
+
+    <!-- ═══ TAB: BusinessTypes ═══ -->
+    <div id="tabBizType" class="tab-content">
+        <div class="card">
+            <h2>🏢 BusinessType Manager</h2>
+            <div class="row">
+                <div class="col"><label>Ruleset ID</label><input id="btRulesetId" type="number" placeholder="e.g. 1" /></div>
+                <div class="col" style="flex:0 0 auto; align-self:flex-end;">
+                    <button onclick="btLoad()">Load BusinessTypes</button>
+                </div>
+            </div>
+            <div class="table-wrap" style="margin-top:8px;max-height:250px;">
+                <table>
+                    <thead><tr><th>Code</th><th>Name</th><th>Status</th><th>Tax Rates</th><th>Action</th></tr></thead>
+                    <tbody id="btTable"></tbody>
+                </table>
+            </div>
+
+            <!-- Edit BusinessType -->
+            <div class="sub-panel" style="margin-top:8px;">
+                <h3>Edit BusinessType</h3>
+                <input id="btEditId" type="hidden" />
+                <div class="row">
+                    <div class="col"><label>Business Type ID</label><input id="btCode" readonly style="background:#0a1022;" /></div>
+                    <div class="col"><label>Name</label><input id="btName" placeholder="Name" /></div>
+                    <div class="col"><label>Description</label><input id="btDesc" placeholder="Optional" /></div>
+                    <div class="col"><label>Status</label><select id="btStatus"><option value="active">active</option><option value="inactive">inactive</option></select></div>
+                </div>
+                <div class="actions">
+                    <button class="ok" onclick="btUpdate()">✅ Update BusinessType</button>
+                    <button class="alt" onclick="btClear()">Clear</button>
+                </div>
+            </div>
+
+            <!-- Upsert Tax Rates -->
+            <div class="sub-panel" style="margin-top:8px;">
+                <h3>Upsert Tax Rates</h3>
+                <div class="muted" style="margin-bottom:6px;">Full replace of tax rates for the selected business type</div>
+                <div id="btRatesContainer"></div>
+                <div class="row" style="margin-top:6px;">
+                    <button class="ok" onclick="btAddRateRow()">+ Add Tax Rate</button>
+                    <button class="ok" onclick="btUpsertRates()">💾 Save All Tax Rates</button>
+                    <button class="alt" onclick="btClearRates()">Reset</button>
+                </div>
+                <div id="btRatesResult" class="log" style="margin-top:8px;min-height:40px;max-height:150px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Log -->
+    <div class="card">
+        <h2>📝 API Log</h2>
+        <div id="log" class="log" style="min-height:30px;max-height:200px;"></div>
+    </div>
+</div>
+
+<script>
+// ═══ Helpers ═══
+const $ = id => document.getElementById(id);
+function hdr(){ const t=$('token').value.trim(), h={'Content-Type':'application/json'}; if(t)h.Authorization=`Bearer ${t}`; return h; }
+function base(){ return $('baseUrl').value.trim(); }
+function lg(m){ $('log').textContent=`[${new Date().toLocaleTimeString()}] ${m}\n`+$('log').textContent; }
+function fmt(n){ return n==null?'—':Number(n).toLocaleString('vi-VN'); }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function jn(el,d){ $(el).textContent=JSON.stringify(d,null,2); }
+
+async function api(method,path,body){
+    const url=`${base()}${path}`, opt={method,headers:hdr()};
+    if(body!==undefined) opt.body=JSON.stringify(body);
+    lg(`→ ${method} ${path}`);
+    const res=await fetch(url,opt);
+    const txt=await res.text();
+    let data=txt; try{data=JSON.parse(txt);}catch{}
+    lg(`← ${res.status} ${JSON.stringify(data).substring(0,300)}`);
+    if(!res.ok){alert(`❌ ${res.status}: ${typeof data==='string'?data:JSON.stringify(data)}`);throw new Error(res.status);}
+    return data?.data ?? data;
+}
+
+function switchTab(id,el){ document.querySelectorAll('.tab-content').forEach(e=>e.classList.remove('active')); document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active')); $(id).classList.add('active'); el.classList.add('active'); }
+
+let _ov=null;
+
+async function loadAll(){ await loadOverview(); await loadRef(); }
+
+// ═══ Overview ═══
+async function loadOverview(){
+    const d=await api('GET','/api/admin/accounting/overview'); _ov=d;
+    // Templates
+    let h=''; (d.templates||[]).forEach(t=>{
+        h+=`<tr><td>${t.templateId}</td><td><b>${esc(t.templateCode)}</b></td><td>${esc(t.name)}</td><td>${t.isActive?'✅':'❌'}</td><td>`;
+        (t.versions||[]).forEach(v=>h+=`<div style="cursor:pointer;color:${v.isActive?'var(--ok)':'var(--muted)'};" onclick="goVersion(${v.templateVersionId})">v${v.templateVersionId}: ${esc(v.versionLabel)} ${v.isActive?'<span class=badge style=background:#166534;color:#86efac>ACTIVE</span>':'<span class=badge style=background:#3b1f1f;color:#fca5a5>draft</span>'} (${v.mappingCount}m)</div>`);
+        h+=`</td></tr>`;
+    });
+    $('ovTemplates').innerHTML=h||'<tr><td colspan=5 class=muted>—</td></tr>';
+    // Rulesets
+    h=''; (d.taxRulesets||[]).forEach(r=>h+=`<tr><td>${r.rulesetId}</td><td>${esc(r.code)}</td><td>${r.isActive?'✅':'❌'}</td><td>${r.groupRuleCount}</td><td>${r.industryRateCount}</td></tr>`);
+    $('ovRulesets').innerHTML=h||'<tr><td colspan=5>—</td></tr>';
+    // Formulas
+    const fs=d.formulas||[]; $('ovFCount').textContent=fs.length; h='';
+    fs.forEach(f=>h+=`<tr class=clickable onclick="goFormula(${f.formulaId})"><td>${f.formulaId}</td><td><b>${esc(f.code)}</b></td><td class=muted>${esc(f.name)}</td><td>${f.formulaType}</td><td>${f.isActive?'✅':'❌'}</td><td><button class=copy-btn onclick="event.stopPropagation();goFormula(${f.formulaId})">→</button></td></tr>`);
+    $('ovFormulas').innerHTML=h||'<tr><td colspan=6>—</td></tr>';
+    // Dropdowns
+    const vs=$('tvQuick'); vs.innerHTML='<option value="">—</option>';
+    (d.templates||[]).forEach(t=>t.versions.forEach(v=>vs.innerHTML+=`<option value="${v.templateVersionId}">${t.templateCode}/v${v.templateVersionId}: ${v.versionLabel} ${v.isActive?'[ACT]':'[draft]'}</option>`));
+    const fq=$('fmQuick'); fq.innerHTML='<option value="">—</option>';
+    fs.forEach(f=>fq.innerHTML+=`<option value="${f.formulaId}">${f.formulaId} — ${f.code}</option>`);
+    // BizTypes
+    h=''; (d.businessTypes||[]).forEach(b=>h+=`<tr><td>${esc(b.code)}</td><td>${esc(b.name)}</td><td class=muted style=font-size:9px>${(b.businessTypeId||'').substring(0,8)}…</td></tr>`);
+    $('ovBizTypes').innerHTML=h||'<tr><td colspan=3>—</td></tr>';
+}
+function goVersion(id){ $('tvId').value=id; $('fldVer').value=id; $('rdVer').value=id; switchTab('tabVersion',document.querySelectorAll('.tab')[1]); tvDetail(); }
+function goFormula(id){ $('fmId').value=id; $('trFId').value=id; switchTab('tabFormula',document.querySelectorAll('.tab')[2]); fmDetail(); }
+
+// ═══ Template Version ═══
+async function tvDetail(){ const id=$('tvId').value;if(!id)return; const d=await api('GET',`/api/admin/accounting/template-versions/${id}`); $('tvLabel').value=d.versionLabel||''; $('tvEffective').value=d.effectiveFrom||''; $('tvNotes').value=d.changeNotes||''; jn('tvResult',d); }
+async function tvFull(){ const id=$('tvId').value;if(!id)return; jn('tvResult',await api('GET',`/api/admin/accounting/template-versions/${id}/full-structure`)); }
+async function tvClone(){ const id=$('tvId').value;if(!id)return; const d=await api('POST',`/api/admin/accounting/template-versions/${id}/clone`); jn('tvResult',d); alert(`✅ Clone → v${d.templateVersionId}`); $('tvId').value=d.templateVersionId; }
+async function tvUpdate(){ const id=$('tvId').value;if(!id)return; const b={}; if($('tvLabel').value)b.versionLabel=$('tvLabel').value; if($('tvEffective').value)b.effectiveFrom=$('tvEffective').value; if($('tvNotes').value)b.changeNotes=$('tvNotes').value; jn('tvResult',await api('PATCH',`/api/admin/accounting/template-versions/${id}`,b)); alert('✅ Updated'); }
+async function tvActivate(){ const id=$('tvId').value;if(!id)return; jn('tvResult',await api('POST',`/api/admin/accounting/template-versions/${id}/activate`)); alert('✅ Activated'); }
+async function tvDeactivate(){ const id=$('tvId').value;if(!id)return; jn('tvResult',await api('POST',`/api/admin/accounting/template-versions/${id}/deactivate`)); alert('✅ Deactivated'); }
+async function tvDelete(){ const id=$('tvId').value;if(!id||!confirm(`Delete draft v${id}?`))return; await api('DELETE',`/api/admin/accounting/template-versions/${id}`); $('tvResult').textContent='Deleted'; alert('✅ Deleted'); }
+
+// ═══ Formulas ═══
+async function fmDetail(){
+    const id=$('fmId').value;if(!id)return;
+    const d=await api('GET',`/api/admin/accounting/formulas/${id}`);
+    $('fmCode').textContent=d.code||'—'; $('fmType').textContent=d.formulaType||'—'; $('fmActive').textContent=d.isActive?'✅':'❌';
+    $('fmExplanation').textContent=d.explanation||'(none)';
+    try{$('fmJsonView').textContent=JSON.stringify(JSON.parse(d.expressionJson||'{}'),null,2);}catch{$('fmJsonView').textContent=d.expressionJson||'';}
+    $('fmName').value=d.name||''; $('fmDesc').value=d.description||''; $('fmExprJson').value=d.expressionJson||''; $('fmFType').value=d.formulaType||'';
+    fmFormat();
+}
+async function fmUpdate(){
+    const id=$('fmId').value;if(!id)return; const b={};
+    if($('fmName').value)b.name=$('fmName').value;
+    if($('fmDesc').value)b.description=$('fmDesc').value;
+    if($('fmFType').value)b.formulaType=$('fmFType').value;
+    if($('fmExprJson').value)b.expressionJson=$('fmExprJson').value;
+    if($('fmIsActive').value)b.isActive=$('fmIsActive').value==='true';
+    await api('PATCH',`/api/admin/accounting/formulas/${id}/testing`,b);
+    alert('✅ Updated'); fmDetail();
+}
+async function fmClone(){
+    const id=$('fmId').value;if(!id)return; const b={};
+    if($('fmCloneCode').value)b.newCode=$('fmCloneCode').value;
+    if($('fmCloneSuffix').value)b.nameSuffix=$('fmCloneSuffix').value;
+    const d=await api('POST',`/api/admin/accounting/formulas/${id}/clone`,b);
+    alert(`✅ Clone → ID:${d.formulaId}`); $('fmId').value=d.formulaId; fmDetail();
+}
+function fmFormat(){ try{$('fmExprJson').value=JSON.stringify(JSON.parse($('fmExprJson').value),null,2);}catch{} }
+function fmValidate(){ try{JSON.parse($('fmExprJson').value);alert('✅ Valid');}catch(e){alert('❌ '+e.message);} }
+
+// ═══ Field Mappings ═══
+function fldSrcChg(){ $('fldQueryGrp').style.display=$('fldSrc').value==='query'?'':'none'; $('fldFormulaGrp').style.display=$('fldSrc').value==='formula'?'':'none'; }
+async function fldLoad(){
+    const v=$('fldVer').value;if(!v)return;
+    const d=await api('GET',`/api/admin/accounting/template-versions/${v}`);
+    const ms=d.fieldMappings||[]; let h='';
+    ms.forEach(m=>{
+        const mj=encodeURIComponent(JSON.stringify(m));
+        h+=`<tr class=clickable onclick="fldPick(JSON.parse(decodeURIComponent('${mj}')))">
+            <td>${m.mappingId}</td><td><b>${esc(m.fieldCode)}</b></td><td>${esc(m.fieldLabel)}</td><td>${m.fieldType}</td>
+            <td><span class="badge ${m.sourceType==='formula'?'ref':m.sourceType==='query'?'aggregate':'context'}">${m.sourceType||'—'}</span></td>
+            <td>${m.sourceEntityId||'—'}</td><td>${m.sourceFieldId||'—'}</td><td>${m.aggregationType||'—'}</td>
+            <td>${m.formulaId||'—'}</td><td>${m.sortOrder}</td><td></td></tr>`;
+    });
+    $('fldTable').innerHTML=h||'<tr><td colspan=11>—</td></tr>';
+}
+function fldPick(m){ $('fldEditId').value=m.mappingId; $('fldCode').value=m.fieldCode||''; $('fldLabel').value=m.fieldLabel||''; $('fldType').value=m.fieldType||'decimal'; $('fldSrc').value=m.sourceType||'query'; $('fldEntId').value=m.sourceEntityId||''; $('fldFldId').value=m.sourceFieldId||''; $('fldFilter').value=m.filterJson||''; $('fldAgg').value=m.aggregationType||''; $('fldFormId').value=m.formulaId||''; $('fldFormExpr').value=m.formulaExpression||''; $('fldSort').value=m.sortOrder||0; fldSrcChg(); }
+async function fldCreate(){
+    const v=$('fldVer').value;if(!v)return alert('Version ID?');
+    const b={fieldCode:$('fldCode').value,fieldLabel:$('fldLabel').value,fieldType:$('fldType').value,sourceType:$('fldSrc').value,sortOrder:Number($('fldSort').value),isRequired:$('fldReq').value==='true'};
+    if($('fldEntId').value)b.sourceEntityId=Number($('fldEntId').value);
+    if($('fldFldId').value)b.sourceFieldId=Number($('fldFldId').value);
+    if($('fldFilter').value)b.filterJson=$('fldFilter').value;
+    if($('fldAgg').value)b.aggregationType=$('fldAgg').value;
+    if($('fldFormId').value)b.formulaId=Number($('fldFormId').value);
+    if($('fldFormExpr').value)b.formulaExpression=$('fldFormExpr').value;
+    const d=await api('POST',`/api/admin/accounting/template-versions/${v}/field-mappings`,b);
+    alert(`✅ Created ID:${d.mappingId}`); fldLoad();
+}
+async function fldUpdate(){
+    const mid=$('fldEditId').value;if(!mid)return alert('Select mapping');
+    const b={sourceType:$('fldSrc').value,sortOrder:Number($('fldSort').value)};
+    if($('fldLabel').value)b.fieldLabel=$('fldLabel').value;
+    if($('fldType').value)b.fieldType=$('fldType').value;
+    if($('fldEntId').value)b.sourceEntityId=Number($('fldEntId').value);
+    if($('fldFldId').value)b.sourceFieldId=Number($('fldFldId').value);
+    if($('fldFilter').value)b.filterJson=$('fldFilter').value;
+    if($('fldAgg').value)b.aggregationType=$('fldAgg').value;
+    if($('fldFormId').value)b.formulaId=Number($('fldFormId').value);
+    if($('fldFormExpr').value)b.formulaExpression=$('fldFormExpr').value;
+    await api('PATCH',`/api/admin/accounting/field-mappings/${mid}/testing`,b);
+    alert('✅ Updated'); fldLoad();
+}
+async function fldDelete(){ const mid=$('fldEditId').value;if(!mid||!confirm(`Delete mapping ${mid}?`))return; await api('DELETE',`/api/admin/accounting/field-mappings/${mid}`); alert('✅ Deleted'); fldLoad(); }
+function fldClear(){ ['fldEditId','fldCode','fldLabel','fldFilter','fldEntId','fldFldId','fldFormId','fldFormExpr'].forEach(i=>$(i).value=''); $('fldSort').value='0'; }
+
+// ═══ Row Definitions ═══
+async function rdLoad(){
+    const v=$('rdVer').value;if(!v)return;
+    const rows=await api('GET',`/api/admin/accounting/template-versions/${v}/row-definitions`);
+    let h=''; (rows||[]).forEach(r=>{
+        const rj=encodeURIComponent(JSON.stringify(r));
+        h+=`<tr class=clickable onclick="rdPick(JSON.parse(decodeURIComponent('${rj}')))">
+            <td>${r.rowDefId}</td><td><span class="badge ${r.rowType==='subtotal'?'aggregate':r.rowType==='tax_line'?'lookup':'context'}">${r.rowType}</span></td>
+            <td>${esc(r.rowLabel)||'—'}</td><td>${r.position}</td><td>${r.sortOrder}</td>
+            <td>${r.sectionType||'—'}</td><td>${r.groupByField||'—'}</td><td>${r.formulaId?r.formulaId+(r.formulaCode?' ('+r.formulaCode+')':''):'—'}</td>
+            <td>${r.taxType||'—'}</td><td></td></tr>`;
+    });
+    $('rdTable').innerHTML=h||'<tr><td colspan=10>—</td></tr>';
+}
+function rdPick(r){ $('rdEditId').value=r.rowDefId; $('rdRowType').value=r.rowType||''; $('rdLabel').value=r.rowLabel||''; $('rdPos').value=r.position||'per_group'; $('rdSort').value=r.sortOrder||100; $('rdSecType').value=r.sectionType||''; $('rdSecFilter').value=r.sectionFilterValue||''; $('rdGroupBy').value=r.groupByField||''; $('rdFormId').value=r.formulaId||''; $('rdTaxType').value=r.taxType||''; $('rdVisFields').value=r.visibleFieldCodes||''; }
+async function rdCreate(){
+    const v=$('rdVer').value;if(!v)return alert('Version ID?');
+    const b={rowType:$('rdRowType').value,rowLabel:$('rdLabel').value||null,position:$('rdPos').value,sortOrder:Number($('rdSort').value)};
+    if($('rdSecType').value)b.sectionType=$('rdSecType').value;
+    if($('rdSecFilter').value)b.sectionFilterValue=$('rdSecFilter').value;
+    if($('rdGroupBy').value)b.groupByField=$('rdGroupBy').value;
+    if($('rdFormId').value)b.formulaId=Number($('rdFormId').value);
+    if($('rdTaxType').value)b.taxType=$('rdTaxType').value;
+    if($('rdVisFields').value)b.visibleFieldCodes=$('rdVisFields').value;
+    const d=await api('POST',`/api/admin/accounting/template-versions/${v}/row-definitions`,b);
+    alert(`✅ Created ID:${d.rowDefId}`); rdLoad();
+}
+async function rdUpdate(){
+    const rid=$('rdEditId').value;if(!rid)return alert('Select row');
+    const b={rowType:$('rdRowType').value,rowLabel:$('rdLabel').value||null,position:$('rdPos').value,sortOrder:Number($('rdSort').value),
+        sectionType:$('rdSecType').value||null,sectionFilterValue:$('rdSecFilter').value||null,groupByField:$('rdGroupBy').value||null,
+        formulaId:$('rdFormId').value?Number($('rdFormId').value):null,taxType:$('rdTaxType').value||null,visibleFieldCodes:$('rdVisFields').value||null};
+    await api('PATCH',`/api/admin/accounting/row-definitions/${rid}`,b);
+    alert('✅ Updated'); rdLoad();
+}
+async function rdDel(){ const rid=$('rdEditId').value;if(!rid||!confirm(`Delete rowdef ${rid}?`))return; await api('DELETE',`/api/admin/accounting/row-definitions/${rid}`); alert('✅ Deleted'); rdLoad(); }
+function rdClear(){ ['rdEditId','rdLabel','rdSecFilter','rdGroupBy','rdFormId','rdVisFields'].forEach(i=>$(i).value=''); $('rdSort').value='100'; }
+
+// ═══ Entities ═══
+async function entLoad(){
+    const data=await api('GET','/api/admin/accounting/mappable-entities');
+    let h=''; (data||[]).forEach(e=>h+=`<tr class=clickable onclick="entSel(${e.entityId})"><td>${e.entityId}</td><td><b>${esc(e.entityCode)}</b></td><td>${esc(e.displayName)}</td><td>${e.category}</td><td>${e.isActive?'✅':'❌'}</td><td>${e.fieldCount}</td><td><button class=copy-btn onclick="event.stopPropagation();entFill(${e.entityId},'${esc(e.entityCode)}','${esc(e.displayName)}','${e.category}','${esc(e.description||'')}')">Edit</button></td></tr>`);
+    $('entTable').innerHTML=h||'<tr><td colspan=7>—</td></tr>';
+}
+async function entSel(eid){
+    $('efEntId').value=eid;
+    const d=await api('GET',`/api/admin/accounting/mappable-entities/${eid}`);
+    $('entSelectedName').textContent=d.entityCode;
+    let h=''; (d.fields||[]).forEach(f=>h+=`<tr class=clickable onclick="efFill(${f.fieldId},${f.entityId},'${esc(f.fieldCode)}','${esc(f.displayName)}','${f.dataType}','${esc(f.allowedAggregations)}','${esc(f.description||'')}')"><td>${f.fieldId}</td><td><b>${esc(f.fieldCode)}</b></td><td>${esc(f.displayName)}</td><td>${f.dataType}</td><td class=muted>${esc(f.allowedAggregations)}</td><td>${f.isActive?'✅':'❌'}</td><td></td></tr>`);
+    $('entFldTable').innerHTML=h||'<tr><td colspan=7>—</td></tr>';
+}
+function entFill(id,code,name,cat,desc){ $('entEditId').value=id; $('entCode').value=code; $('entName').value=name; $('entCat').value=cat; $('entDesc').value=desc; }
+function efFill(fid,eid,code,name,dt,aggs,desc){ $('efEditId').value=fid; $('efEntId').value=eid; $('efCode').value=code; $('efName').value=name; $('efDtype').value=dt; $('efAggs').value=aggs; $('efDesc').value=desc; }
+async function entCreate(){ const b={entityCode:$('entCode').value,displayName:$('entName').value,category:$('entCat').value}; if($('entDesc').value)b.description=$('entDesc').value; const d=await api('POST','/api/admin/accounting/mappable-entities',b); alert(`✅ Created ID:${d.entityId}`); entLoad(); }
+async function entUpdate(){ const id=$('entEditId').value;if(!id)return; const b={}; if($('entName').value)b.displayName=$('entName').value; if($('entDesc').value)b.description=$('entDesc').value; await api('PATCH',`/api/admin/accounting/mappable-entities/${id}`,b); alert('✅ Updated'); entLoad(); }
+async function efCreate(){ const eid=$('efEntId').value;if(!eid)return alert('Entity ID?'); const b={fieldCode:$('efCode').value,displayName:$('efName').value,dataType:$('efDtype').value,allowedAggregations:$('efAggs').value}; if($('efDesc').value)b.description=$('efDesc').value; const d=await api('POST',`/api/admin/accounting/mappable-entities/${eid}/fields`,b); alert(`✅ Created ID:${d.fieldId}`); entSel(Number(eid)); }
+async function efUpdate(){ const fid=$('efEditId').value;if(!fid)return; const b={}; if($('efName').value)b.displayName=$('efName').value; if($('efDesc').value)b.description=$('efDesc').value; if($('efDtype').value)b.dataType=$('efDtype').value; if($('efAggs').value)b.allowedAggregations=$('efAggs').value; await api('PATCH',`/api/admin/accounting/mappable-fields/${fid}`,b); alert('✅ Updated'); entSel(Number($('efEntId').value)); }
+
+// ═══ Reference ═══
+async function loadRef(){
+    const d=await api('GET','/api/admin/accounting/reference');
+    const g=$('refGrid'); g.innerHTML='';
+    for(const[k,arr]of Object.entries(d||{})){
+        g.innerHTML+=`<div class=col><h3>${k}</h3><div class=table-wrap style=max-height:200px><table><thead><tr><th>Value</th><th>Label</th><th>Desc</th></tr></thead><tbody>${(arr||[]).map(i=>`<tr><td><code>${esc(i.value)}</code></td><td>${esc(i.label)}</td><td class=muted>${esc(i.description||'')}${i.example?'<br><code style=font-size:9px>'+esc(i.example)+'</code>':''}</td></tr>`).join('')}</tbody></table></div></div>`;
+    }
+}
+
+// ═══ Compare ═══
+async function runCompare(){
+    const ids=$('cmpBiz').value.trim();
+    const b={businessLocationId:Number($('cmpLoc').value),periodId:Number($('cmpPer').value),draftVersionId:Number($('cmpDraft').value),activeVersionId:Number($('cmpActive').value)||null,groupNumber:Number($('cmpGrp').value),taxMethod:$('cmpMeth').value,rulesetId:Number($('cmpRule').value),batchSize:Number($('cmpBatch').value),businessTypeIds:ids?ids.split(',').map(x=>x.trim()).filter(Boolean):[]};
+    const d=await api('POST','/api/admin/accounting/testing/compare',b);
+    const ch=d?.diff?.valueChanges||[];
+    $('cmpDiff').innerHTML=ch.length?ch.map(c=>{const dt=c.after-c.before;return`<tr class="${dt>0?'diff-add':dt<0?'diff-del':''}"><td><b>${c.code}</b></td><td>${fmt(c.before)}</td><td>${fmt(c.after)}</td><td>${dt>0?'+':''}${fmt(dt)}</td></tr>`;}).join(''):'<tr><td colspan=4 class=muted>No changes</td></tr>';
+    jn('cmpActSum',d?.active?.summary||{}); jn('cmpDftSum',d?.draft?.summary||{});
+}
+
+// ═══ Trace ═══
+async function runTrace(){
+    const ids=$('trBiz').value.trim();
+    const b={formulaId:Number($('trFId').value),businessLocationId:Number($('trLoc').value),periodId:Number($('trPer').value),rulesetId:Number($('trRule').value),businessTypeIds:ids?ids.split(',').map(x=>x.trim()).filter(Boolean):[]};
+    const d=await api('POST','/api/admin/accounting/testing/trace',b);
+    $('trCode').textContent=`${d.formulaCode} (${d.formulaName})`; $('trVal').textContent=fmt(d.finalValue);
+    $('trTree').innerHTML=(d.trace||[]).map(trRender).join('')||'(empty)';
+}
+function trRender(n){
+    const kids=(n.children||[]).length?`<div class=tree>${n.children.map(trRender).join('')}</div>`:'';
+    return`<div class=tree-node><div>#${n.step} <span class="badge ${n.nodeType}">${n.nodeType}</span> ${esc(n.description)} → <span class=node-value>${fmt(n.resolvedValue)}</span>${n.source?` <span class=muted>[${esc(n.source)}]</span>`:''}</div>${n.debug?`<div class=node-debug>⚠ ${esc(n.debug)}</div>`:''}${kids}</div>`;
+}
+
+// ═══ Node Schema ═══
+async function loadSchemas(){
+    const d=await api('GET','/api/admin/accounting/reference/formula-node-schemas');
+    $('schemaGrid').innerHTML=(d||[]).map(s=>`<div class=schema-card><h4>${s.nodeType} — ${s.label}</h4><div class=muted>${s.description}</div>${s.example?`<div style=margin:4px><code style=font-size:10px;color:#60a5fa>${esc(s.example)}</code></div>`:''}<div style="border-top:1px solid var(--line);padding-top:4px;margin-top:4px">${(s.fields||[]).map(f=>`<div class=schema-field><span class=fname>${f.fieldName}</span><span class=ftype> : ${f.fieldType}</span>${f.required?'<span class=freq> *</span>':''}${f.allowedValues?' <span class=ftype>['+f.allowedValues.join(', ')+']</span>':''}${f.description?' <span class=muted>— '+f.description+'</span>':''}</div>`).join('')}</div></div>`).join('');
+}
+
+// ═══ BusinessTypes + Tax Rates ═══
+let _btRates = []; // Store current rates being edited
+
+async function btLoad(){
+    const rid=$('btRulesetId').value;
+    if(!rid) return alert('Ruleset ID?');
+    const d=await api('GET',`/api/admin/accounting/business-types?rulesetId=${rid}`);
+    let h=''; (d||[]).forEach(bt=>{
+        const ratesStr=(bt.taxRates||[]).map(r=>`${r.taxType}:${(r.taxRate*100).toFixed(1)}%`).join(', ')||'—';
+        h+=`<tr class=clickable onclick="btPick(${JSON.stringify(bt).replace(/"/g,'&quot;')})">
+                <td><b>${esc(bt.code)}</b></td><td>${esc(bt.name)}</td><td><span class="badge ${bt.status==='active'?'active':'draft'}">${bt.status}</span></td><td class=muted style=font-size:10px>${esc(ratesStr)}</td><td><button class=copy-btn onclick="event.stopPropagation();btPick(${JSON.stringify(bt).replace(/"/g,'&quot;')})">Edit</button></td>
+            </tr>`;
+    });
+    $('btTable').innerHTML=h||'<tr><td colspan=5 class=muted>—</td></tr>';
+}
+
+function btPick(bt){
+    $('btEditId').value=bt.businessTypeId;
+    $('btCode').value=bt.code;
+    $('btName').value=bt.name||'';
+    $('btDesc').value=bt.description||'';
+    $('btStatus').value=bt.status||'active';
+    _btRates = (bt.taxRates||[]).map(r=>({...r}));
+    btRenderRates();
+}
+
+function btRenderRates(){
+    const html=_btRates.map((r,i)=>`
+        <div class="row" style="background:#0a1022;border:1px solid var(--line);border-radius:4px;padding:6px;margin-bottom:4px;">
+            <div class="col" style="flex:0 0 120px;"><label>Tax Type</label><select onchange="btChangeRate(${i},'TaxType',this.value)" style="width:100%;">
+                <option value="VAT" ${r.taxType==='VAT'?'selected':''}>VAT</option>
+                <option value="PIT_METHOD_1" ${r.taxType==='PIT_METHOD_1'?'selected':''}>PIT_METHOD_1</option>
+            </select></div>
+            <div class="col" style="flex:0 0 120px;"><label>Rate (0-1)</label><input type="number" step="0.01" min="0" max="1" value="${r.taxRate}" onchange="btChangeRate(${i},'TaxRate',parseFloat(this.value))" /></div>
+            <div class="col"><label>Description</label><input type="text" value="${r.description||''}" onchange="btChangeRate(${i},'Description',this.value)" placeholder="Optional" /></div>
+            <div style="flex:0 0 auto;align-self:flex-end;"><button class="warn" onclick="btRemoveRate(${i})">✕ Remove</button></div>
+        </div>
+    `).join('');
+    $('btRatesContainer').innerHTML=html;
+}
+
+function btChangeRate(i,field,value){
+    if(_btRates[i]) _btRates[i][field]=value;
+}
+
+function btRemoveRate(i){
+    _btRates.splice(i,1);
+    btRenderRates();
+}
+
+function btAddRateRow(){
+    _btRates.push({taxType:'VAT',taxRate:0.1,description:''});
+    btRenderRates();
+}
+
+function btClear(){
+    $('btEditId').value='';
+    $('btCode').value='';
+    $('btName').value='';
+    $('btDesc').value='';
+    $('btStatus').value='active';
+    _btRates=[];
+    btRenderRates();
+}
+
+function btClearRates(){
+    _btRates=[];
+    btRenderRates();
+    $('btRatesResult').textContent='';
+}
+
+async function btUpdate(){
+    const btid=$('btEditId').value;
+    if(!btid) return alert('Select BusinessType first');
+    const b={};
+    if($('btName').value) b.name=$('btName').value;
+    if($('btDesc').value) b.description=$('btDesc').value;
+    if($('btStatus').value) b.status=$('btStatus').value;
+    try{
+        const d=await api('PATCH',`/api/admin/accounting/business-types/${btid}`,b);
+        alert('✅ Updated'); btLoad();
+    }catch(e){
+        alert('❌ '+e.message);
+    }
+}
+
+async function btUpsertRates(){
+    const rid=$('btRulesetId').value;
+    const btid=$('btEditId').value;
+    if(!rid) return alert('Ruleset ID?');
+    if(!btid) return alert('Select BusinessType first');
+    if(_btRates.length===0) return alert('Add at least one tax rate');
+    
+    // Validate
+    const seen=new Set();
+    for(const r of _btRates){
+        if(!r.taxType) return alert('All tax types required');
+        if(seen.has(r.taxType)) return alert('Duplicate TaxType: '+r.taxType);
+        seen.add(r.taxType);
+        if(r.taxRate<0 || r.taxRate>1) return alert('TaxRate must be 0-1 (fraction)');
+    }
+    
+    const b={rates:_btRates.map(r=>({
+        taxType:r.taxType,
+        taxRate:Number(r.taxRate),
+        description:r.description||null
+    }))};
+    
+    try{
+        const d=await api('PUT',`/api/admin/accounting/rulesets/${rid}/business-types/${btid}/tax-rates`,b);
+        jn('btRatesResult',{success:true,updatedRates:d});
+        alert('✅ Saved'); _btRates=d.map(r=>({...r})); btRenderRates();
+    }catch(e){
+        alert('❌ '+e.message);
+    }
+}
+</script>
+</body>
+</html>

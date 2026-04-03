@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BizFlow Admin Accounting Lab</title>
+    <style>
+        :root { --bg:#0b1020; --panel:#131a2e; --line:#253052; --txt:#e7ecff; --muted:#9aa8d6; --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; }   
+        * { box-sizing:border-box; }
+        body { margin:0; font-family:Segoe UI,Arial,sans-serif; background:linear-gradient(120deg,#0b1020,#131a2e 45%,#0f1630); color:var(--txt); }
+        .wrap { max-width:1300px; margin:0 auto; padding:20px; }
+        .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:14px; }
+        h1 { font-size:22px; margin:0 0 12px; }
+        h2 { font-size:16px; margin:0 0 10px; }
+        h3 { font-size:14px; margin:0 0 8px; }
+        .row { display:flex; gap:10px; flex-wrap:wrap; }
+        .col { flex:1 1 240px; }
+        label { font-size:12px; color:var(--muted); display:block; margin-bottom:4px; }
+        input, textarea, select { width:100%; background:#0f1630; color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
+        textarea { min-height:92px; font-family:Consolas,monospace; }
+        button { background:#2e4fff; color:white; border:none; padding:9px 12px; border-radius:8px; cursor:pointer; }
+        button.alt { background:#334155; }
+        button.warn { background:#7c2d12; }
+        .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+        .muted { color:var(--muted); font-size:12px; }
+        .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; margin-bottom:12px; }
+        .kpi { background:#0f1630; border:1px solid var(--line); border-radius:10px; padding:10px; }
+        .kpi .label { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.3px; }
+        .kpi .value { font-size:24px; font-weight:700; margin-top:4px; }
+        .table-wrap { max-height:260px; overflow:auto; border:1px solid var(--line); border-radius:8px; }
+        table { width:100%; border-collapse:collapse; font-size:13px; }
+        th, td { border-bottom:1px solid var(--line); padding:7px; text-align:left; vertical-align:top; }
+        th { color:var(--muted); font-size:11px; text-transform:uppercase; }
+        td .mini { font-size:11px; color:var(--muted); }
+        .log { max-height:300px; overflow:auto; background:#0a1022; border:1px solid var(--line); border-radius:8px; padding:8px; font-family:Consolas,monospace; font-size:12px; white-space:pre-wrap; }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <h1>Admin Accounting Lab</h1>
+
+    <div class="card">
+        <h2>Config</h2>
+        <div class="row">
+            <div class="col"><label>Base URL</label><input id="baseUrl" value="http://localhost:7270" /></div>
+            <div class="col"><label>Bearer Token</label><input id="token" placeholder="eyJ..." /></div>
+        </div>
+        <div class="actions">
+            <button onclick="loadOverview()">Load Overview</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Overview</h2>
+        <div class="kpis">
+            <div class="kpi"><div class="label">Templates</div><div id="kpiTemplates" class="value">0</div></div>
+            <div class="kpi"><div class="label">Template Versions</div><div id="kpiVersions" class="value">0</div></div>
+            <div class="kpi"><div class="label">Rulesets</div><div id="kpiRulesets" class="value">0</div></div>
+            <div class="kpi"><div class="label">Formulas</div><div id="kpiFormulas" class="value">0</div></div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <h3>Templates</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>ID</th><th>Code</th><th>Name</th><th>Versions</th><th>Active</th></tr>
+                        </thead>
+                        <tbody id="templatesBody"><tr><td colspan="5" class="muted">No data</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="col">
+                <h3>Rulesets</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>ID</th><th>Code</th><th>Version</th><th>Rules</th><th>Active</th></tr>
+                        </thead>
+                        <tbody id="rulesetsBody"><tr><td colspan="5" class="muted">No data</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="col">
+                <h3>Formulas</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>ID</th><th>Code</th><th>Name</th><th>Type</th><th>Action</th></tr>
+                        </thead>
+                        <tbody id="formulasBody"><tr><td colspan="5" class="muted">No data</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Template Version Actions</h2>
+        <div class="row">
+            <div class="col"><label>TemplateVersionId</label><input id="versionId" type="number" /></div>
+            <div class="col"><label>VersionLabel</label><input id="versionLabel" /></div>
+            <div class="col"><label>EffectiveFrom (yyyy-mm-dd)</label><input id="effectiveFrom" /></div>
+        </div>
+        <div class="actions">
+            <button onclick="getVersionDetail()">Get Detail</button>
+            <button onclick="cloneVersion()">Clone</button>
+            <button onclick="updateVersion()">Update</button>
+            <button onclick="activateVersion()">Activate (Admin)</button>
+            <button class="alt" onclick="deactivateVersion()">Deactivate (Admin)</button>
+            <button class="warn" onclick="deleteVersionDraft()">Delete Draft (Admin)</button>
+        </div>
+        <div id="versionDetail" class="log"></div>
+    </div>
+
+    <!-- ── Reference Data ── -->
+    <div class="card">
+        <h2>Reference Data</h2>
+        <div class="actions"><button onclick="loadReference()">Load Reference</button></div>
+        <div id="refGrid" class="row" style="margin-top:10px;"></div>
+    </div>
+
+    <!-- ── Mappable Entities & Fields ── -->
+    <div class="card">
+        <h2>Mappable Entities & Fields</h2>
+        <div class="actions">
+            <button onclick="loadEntities()">Load All</button>
+            <button onclick="loadEntities(true)">Active Only</button>
+        </div>
+        <div class="table-wrap" style="margin-top:10px;">
+            <table><thead><tr><th>ID</th><th>Code</th><th>TableName</th><th>Active</th><th>Action</th></tr></thead>
+            <tbody id="entitiesBody"><tr><td colspan="5" class="muted">No data</td></tr></tbody></table>
+        </div>
+        <h3 style="margin-top:12px;">Entity Detail / Fields</h3>
+        <div id="entityFields" class="log" style="min-height:60px;"></div>
+        <h3 style="margin-top:12px;">Create / Update Entity</h3>
+        <div class="row">
+            <div class="col"><label>EntityId (for update, blank=create)</label><input id="meId" type="number" /></div>
+            <div class="col"><label>EntityCode</label><input id="meCode" /></div>
+            <div class="col"><label>TableName</label><input id="meTable" /></div>
+            <div class="col"><label>DisplayName</label><input id="meDisplay" /></div>
+            <div class="col"><label>IsActive</label><select id="meActive"><option value="true">true</option><option value="false">false</option></select></div>
+        </div>
+        <div class="actions"><button onclick="saveEntity()">Save Entity</button></div>
+        <h3 style="margin-top:12px;">Create / Update Field</h3>
+        <div class="row">
+            <div class="col"><label>EntityId (parent)</label><input id="mfEntityId" type="number" /></div>
+            <div class="col"><label>FieldId (for update, blank=create)</label><input id="mfId" type="number" /></div>
+            <div class="col"><label>FieldCode</label><input id="mfCode" /></div>
+            <div class="col"><label>ColumnName</label><input id="mfColumn" /></div>
+            <div class="col"><label>DataType</label><input id="mfDataType" placeholder="decimal|text|date" /></div>
+            <div class="col"><label>DisplayName</label><input id="mfDisplay" /></div>
+        </div>
+        <div class="actions"><button onclick="saveField()">Save Field</button></div>
+    </div>
+
+    <!-- ── Full Structure ── -->
+    <div class="card">
+        <h2>Full Structure</h2>
+        <div class="row">
+            <div class="col"><label>TemplateVersionId</label><input id="fsVersionId" type="number" /></div>
+        </div>
+        <div class="actions"><button onclick="loadFullStructure()">Load Full Structure</button></div>
+        <h3 style="margin-top:10px;">Render Preview</h3>
+        <pre id="fsPreview" class="log" style="min-height:60px;"></pre>
+        <div class="row" style="margin-top:10px;">
+            <div class="col">
+                <h3>Field Mappings</h3>
+                <div class="table-wrap">
+                    <table><thead><tr><th>ID</th><th>FieldCode</th><th>Label</th><th>SrcType</th><th>Entity</th><th>Field</th><th>Del</th></tr></thead>
+                    <tbody id="fsMappingsBody"><tr><td colspan="7" class="muted">No data</td></tr></tbody></table>
+                </div>
+            </div>
+            <div class="col">
+                <h3>Row Definitions</h3>
+                <div class="table-wrap">
+                    <table><thead><tr><th>ID</th><th>Row</th><th>Pos</th><th>Type</th><th>SecType</th><th>Filter</th><th>Formula</th><th>Del</th></tr></thead>
+                    <tbody id="fsRowDefsBody"><tr><td colspan="8" class="muted">No data</td></tr></tbody></table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Row Definitions CRUD ── -->
+    <div class="card">
+        <h2>Row Definitions</h2>
+        <div class="row">
+            <div class="col"><label>TemplateVersionId</label><input id="rdVersionId" type="number" /></div>
+        </div>
+        <div class="actions"><button onclick="loadRowDefs()">Load Row Definitions</button></div>
+        <div class="table-wrap" style="margin-top:10px;">
+            <table><thead><tr><th>ID</th><th>RowType</th><th>Position</th><th>Label</th><th>SectionType</th><th>SectionFilter</th><th>FormulaId</th><th>VisibleFields</th><th>Action</th></tr></thead>
+            <tbody id="rowDefsBody"><tr><td colspan="9" class="muted">No data</td></tr></tbody></table>
+        </div>
+        <h3 style="margin-top:12px;">Create / Update Row Definition</h3>
+        <div class="row">
+            <div class="col"><label>RowDefId (for update, blank=create)</label><input id="rdId" type="number" /></div>
+            <div class="col"><label>RowType</label><select id="rdRowType"></select></div>
+            <div class="col"><label>Position</label><select id="rdPosition"></select></div>
+            <div class="col"><label>SectionType</label><select id="rdSectionType"><option value="">—</option></select></div>
+        </div>
+        <div class="row">
+            <div class="col"><label>DisplayLabel</label><input id="rdLabel" /></div>
+            <div class="col"><label>SortOrder</label><input id="rdSort" type="number" /></div>
+            <div class="col"><label>FormulaId</label><input id="rdFormulaId" type="number" /></div>
+            <div class="col"><label>SectionFilterValue</label><input id="rdSectionFilter" /></div>
+        </div>
+        <label>VisibleFieldCodes (JSON array, e.g. ["so_tien","thu_vao"])</label>
+        <textarea id="rdVisibleFields" style="min-height:40px;">[]</textarea>
+        <div class="actions">
+            <button onclick="saveRowDef()">Save Row Definition</button>
+        </div>
+    </div>
+
+    <!-- ── Field Mappings Create / Delete ── -->
+    <div class="card">
+        <h2>Field Mappings (Create / Delete)</h2>
+        <div class="row">
+            <div class="col"><label>TemplateVersionId</label><input id="fmcVersionId" type="number" /></div>
+        </div>
+        <h3 style="margin-top:10px;">Create Field Mapping</h3>
+        <div class="row">
+            <div class="col"><label>FieldCode</label><input id="fmcFieldCode" /></div>
+            <div class="col"><label>FieldLabel</label><input id="fmcFieldLabel" /></div>
+            <div class="col"><label>FieldType</label><input id="fmcFieldType" placeholder="decimal|text|date|computed" /></div>
+            <div class="col"><label>SourceType</label><input id="fmcSourceType" placeholder="query|formula|static|auto" /></div>
+        </div>
+        <div class="row">
+            <div class="col"><label>SourceEntityId</label><input id="fmcSourceEntityId" type="number" /></div>
+            <div class="col"><label>SourceFieldId</label><input id="fmcSourceFieldId" type="number" /></div>
+            <div class="col"><label>AggregationType</label><input id="fmcAggType" placeholder="sum|avg|none" /></div>
+            <div class="col"><label>FormulaId</label><input id="fmcFormulaId" type="number" /></div>
+        </div>
+        <label>FilterJson (optional)</label>
+        <textarea id="fmcFilter" style="min-height:40px;">{}</textarea>
+        <div class="actions"><button onclick="createFieldMapping()">Create Mapping</button></div>
+        <h3 style="margin-top:12px;">Delete Mapping</h3>
+        <div class="row">
+            <div class="col"><label>MappingId</label><input id="fmcDelId" type="number" /></div>
+            <div class="col" style="align-self:end;"><button class="warn" onclick="deleteFieldMapping()">Delete Mapping</button></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Field Mapping Testing</h2>
+        <div class="row">
+            <div class="col"><label>MappingId</label><input id="fmMappingId" type="number" /></div>
+            <div class="col"><label>SourceType</label><input id="fmSourceType" placeholder="query | formula | static | auto" /></div>
+            <div class="col"><label>SourceEntityId</label><input id="fmSourceEntityId" type="number" placeholder="e.g. 3 = gl_entries" /></div>
+            <div class="col"><label>SourceFieldId</label><input id="fmSourceFieldId" type="number" placeholder="e.g. 11 = EntryDate" /></div>
+        </div>
+        <div class="row">
+            <div class="col"><label>FieldLabel (optional)</label><input id="fmFieldLabel" /></div>
+            <div class="col"><label>FieldType (optional)</label><input id="fmFieldType" placeholder="date | text | decimal | computed" /></div>
+            <div class="col"><label>AggregationType (optional)</label><input id="fmAggregationType" placeholder="sum | avg | none" /></div>
+        </div>
+        <label>FilterJson (optional)</label>
+        <textarea id="fmFilterJson" placeholder='{"MoneyChannel":"cash"}'></textarea>
+        <div class="actions">
+            <button class="alt" onclick="prefillMappingFromVersionDetail()">Prefill From Version Detail</button>
+            <button onclick="updateFieldMappingRef()">Update Mapping Ref</button>
+        </div>
+        <div id="fieldMappingResult" class="log"></div>
+        <div class="muted" style="margin-top:8px;">
+            Tip: lấy MappingId từ Get Detail của TemplateVersion (fieldMappings[].mappingId), sau đó remap SourceEntityId/SourceFieldId để test cột.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Formula Testing</h2>
+        <div class="row">
+            <div class="col"><label>FormulaId</label><input id="formulaId" type="number" /></div>
+            <div class="col"><label>Name</label><input id="formulaName" /></div>
+            <div class="col"><label>FormulaType</label><input id="formulaType" /></div>
+        </div>
+        <label>Description</label>
+        <input id="formulaDescription" />
+        <label>ExpressionJson</label>
+        <textarea id="formulaJson"></textarea>
+        <div class="actions">
+            <button class="alt" onclick="getFormulaDetail()">Get Formula Detail</button>
+            <button onclick="updateFormula()">Update Formula (Testing)</button>
+            <button onclick="cloneFormula()">Clone Formula</button>
+        </div>
+        <div id="formulaDetail" class="log"></div>
+    </div>
+
+    <div class="card">
+        <h2>Template Formula Impact</h2>
+        <div class="row">
+            <div class="col"><label>TemplateVersionId</label><input id="impactTemplateVersionId" type="number" /></div>
+            <div class="col"><label>Formula In Template</label><select id="impactFormulaSelect"></select></div>
+            <div class="col"><label>Row Index To Compare</label><input id="impactRowIndex" type="number" value="0" /></div>
+        </div>
+        <div class="actions">
+            <button class="alt" onclick="loadTemplateFormulasForImpact()">Load Formulas In Template</button>
+            <button onclick="captureImpactBaseline()">1) Capture Before</button>
+            <button onclick="applyFormulaAndCompareImpact()">2) Apply Formula + Compare</button>
+        </div>
+        <div class="row" style="margin-top:10px;">
+            <div class="col">
+                <h3>Template Formulas</h3>
+                <div id="impactFormulaList" class="log"></div>
+            </div>
+            <div class="col">
+                <h3>Impact Diff</h3>
+                <div id="impactDiff" class="log"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Preview (Any template version)</h2>
+        <div class="row">
+            <div class="col"><label>LocationId</label><input id="pLocation" type="number" value="6" /></div>
+            <div class="col"><label>PeriodId</label><input id="pPeriod" type="number" value="1" /></div>
+            <div class="col"><label>TemplateVersionId</label><input id="pTemplateVersion" type="number" /></div>
+            <div class="col"><label>GroupNumber</label><input id="pGroup" type="number" value="2" /></div>
+            <div class="col"><label>TaxMethod</label><input id="pMethod" value="method_1" /></div>
+            <div class="col"><label>RulesetId</label><input id="pRuleset" type="number" value="1" /></div>
+            <div class="col"><label>BatchSize</label><input id="pBatch" type="number" value="20" /></div>
+        </div>
+        <label>BusinessTypeIds (comma-separated GUIDs, optional)</label>
+        <input id="pBusinessTypeIds" placeholder="guid1,guid2" />
+        <div class="actions"><button onclick="preview()">Run Preview</button></div>
+        <div id="previewBox" class="log"></div>
+    </div>
+
+    <div class="card">
+        <h2>API Log</h2>
+        <div id="log" class="log"></div>
+    </div>
+</div>
+
+<script>
+let impactBeforePreview = null;
+
+function headers() {
+    const token = document.getElementById('token').value.trim();
+    const h = { 'Content-Type': 'application/json' };
+    if (token) h.Authorization = `Bearer ${token}`;
+    return h;
+}
+function base() { return document.getElementById('baseUrl').value.trim(); }
+function log(msg) {
+    const el = document.getElementById('log');
+    el.textContent = `[${new Date().toLocaleTimeString()}] ${msg}\n\n` + el.textContent;
+}
+async function call(method, path, body) {
+    const url = `${base()}${path}`;
+    const opt = { method, headers: headers() };
+    if (body !== undefined) opt.body = JSON.stringify(body);
+    const res = await fetch(url, opt);
+    const txt = await res.text();
+    let data = txt;
+    try { data = JSON.parse(txt); } catch {}
+    log(`${method} ${path} -> ${res.status}\n${typeof data === 'string' ? data : JSON.stringify(data, null, 2)}`);
+    return data?.data ?? data;
+}
+function json(el, data) { document.getElementById(el).textContent = JSON.stringify(data, null, 2); }
+
+function getPreviewRequestFromInputs() {
+    const idsRaw = document.getElementById('pBusinessTypeIds').value.trim();
+    return {
+        businessLocationId: Number(document.getElementById('pLocation').value),
+        periodId: Number(document.getElementById('pPeriod').value),
+        templateVersionId: Number(document.getElementById('pTemplateVersion').value),
+        groupNumber: Number(document.getElementById('pGroup').value),
+        taxMethod: document.getElementById('pMethod').value,
+        rulesetId: Number(document.getElementById('pRuleset').value),
+        batchSize: Number(document.getElementById('pBatch').value),
+        businessTypeIds: idsRaw ? idsRaw.split(',').map(x => x.trim()).filter(Boolean) : []
+    };
+}
+
+function validatePreviewRequest(body) {
+    const errors = [];
+    if (!body.businessLocationId || body.businessLocationId <= 0) errors.push('businessLocationId must be > 0');
+    if (!body.periodId || body.periodId <= 0) errors.push('periodId must be > 0');
+    if (!body.templateVersionId || body.templateVersionId <= 0) errors.push('templateVersionId must be > 0');
+    if (!body.rulesetId || body.rulesetId <= 0) errors.push('rulesetId must be > 0');
+    return errors;
+}
+
+async function loadOverview() {
+    const data = await call('GET', '/api/admin/accounting/overview');
+    const templates = data.templates || [];
+    const rulesets = data.taxRulesets || [];
+    const formulas = data.formulas || [];
+
+    const totalVersions = templates.reduce((sum, t) => sum + (t.versions?.length || 0), 0);
+    document.getElementById('kpiTemplates').textContent = templates.length;
+    document.getElementById('kpiVersions').textContent = totalVersions;
+    document.getElementById('kpiRulesets').textContent = rulesets.length;
+    document.getElementById('kpiFormulas').textContent = formulas.length;
+
+    const tBody = document.getElementById('templatesBody');
+    tBody.innerHTML = templates.length
+        ? templates.map(t => `
+            <tr>
+                <td>${t.templateId}</td>
+                <td>${t.templateCode || ''}</td>
+                <td>${t.name || ''}</td>
+                <td>${t.versions?.length || 0}</td>
+                <td>${t.isActive ? 'Yes' : 'No'}</td>
+            </tr>`).join('')
+        : '<tr><td colspan="5" class="muted">No templates</td></tr>';
+
+    const rBody = document.getElementById('rulesetsBody');
+    rBody.innerHTML = rulesets.length
+        ? rulesets.map(r => `
+            <tr>
+                <td>${r.rulesetId}</td>
+                <td>${r.code || ''}</td>
+                <td>${r.version || ''}</td>
+                <td><div>${r.groupRuleCount || 0}</div><div class="mini">industry: ${r.industryRateCount || 0}</div></td>
+                <td>${r.isActive ? 'Yes' : 'No'}</td>
+            </tr>`).join('')
+        : '<tr><td colspan="5" class="muted">No rulesets</td></tr>';
+
+    const fBody = document.getElementById('formulasBody');
+    fBody.innerHTML = formulas.length
+        ? formulas.map(f => `
+            <tr>
+                <td>${f.formulaId}</td>
+                <td>${f.code || ''}</td>
+                <td>${f.name || ''}</td>
+                <td>${f.formulaType || ''}</td>
+                <td><button class="alt" onclick="pickFormula(${f.formulaId})">Load</button></td>
+            </tr>`).join('')
+        : '<tr><td colspan="5" class="muted">No formulas</td></tr>';
+}
+async function getVersionDetail() {
+    const id = document.getElementById('versionId').value;
+    const data = await call('GET', `/api/admin/accounting/template-versions/${id}`);
+    json('versionDetail', data);
+}
+async function cloneVersion() {
+    const id = document.getElementById('versionId').value;
+    await call('POST', `/api/admin/accounting/template-versions/${id}/clone`);
+}
+async function updateVersion() {
+    const id = document.getElementById('versionId').value;
+    const body = {
+        versionLabel: document.getElementById('versionLabel').value || null,
+        effectiveFrom: document.getElementById('effectiveFrom').value || null
+    };
+    await call('PATCH', `/api/admin/accounting/template-versions/${id}`, body);
+}
+async function activateVersion() {
+    const id = document.getElementById('versionId').value;
+    await call('POST', `/api/admin/accounting/template-versions/${id}/activate`);
+}
+async function deactivateVersion() {
+    const id = document.getElementById('versionId').value;
+    await call('POST', `/api/admin/accounting/template-versions/${id}/deactivate`);
+}
+async function deleteVersionDraft() {
+    const id = document.getElementById('versionId').value;
+    await call('DELETE', `/api/admin/accounting/template-versions/${id}`);
+}
+
+function prefillMappingFromVersionDetail() {
+    const raw = document.getElementById('versionDetail').textContent || '';
+    if (!raw.trim()) {
+        json('fieldMappingResult', { message: 'Please load version detail first' });
+        return;
+    }
+
+    let detail;
+    try {
+        detail = JSON.parse(raw);
+    } catch {
+        json('fieldMappingResult', { message: 'Version detail is not valid JSON' });
+        return;
+    }
+
+    const mappings = detail.fieldMappings || [];
+    if (!mappings.length) {
+        json('fieldMappingResult', { message: 'No fieldMappings in version detail' });
+        return;
+    }
+
+    const selected = mappings[0];
+    document.getElementById('fmMappingId').value = selected.mappingId ?? '';
+    document.getElementById('fmSourceType').value = selected.sourceType ?? '';
+    document.getElementById('fmSourceEntityId').value = selected.sourceEntityId ?? '';
+    document.getElementById('fmSourceFieldId').value = selected.sourceFieldId ?? '';
+    document.getElementById('fmFieldLabel').value = selected.fieldLabel ?? '';
+    document.getElementById('fmFieldType').value = selected.fieldType ?? '';
+    document.getElementById('fmAggregationType').value = selected.aggregationType ?? '';
+    document.getElementById('fmFilterJson').value = selected.filterJson ?? '';
+
+    json('fieldMappingResult', { message: 'Prefilled using first mapping from version detail', mapping: selected });
+}
+
+async function updateFieldMappingRef() {
+    const mappingId = Number(document.getElementById('fmMappingId').value);
+    if (!mappingId) {
+        json('fieldMappingResult', { message: 'MappingId is required' });
+        return;
+    }
+
+    const sourceType = document.getElementById('fmSourceType').value.trim();
+    const sourceEntityIdRaw = document.getElementById('fmSourceEntityId').value.trim();
+    const sourceFieldIdRaw = document.getElementById('fmSourceFieldId').value.trim();
+    const fieldLabel = document.getElementById('fmFieldLabel').value.trim();
+    const fieldType = document.getElementById('fmFieldType').value.trim();
+    const aggregationType = document.getElementById('fmAggregationType').value.trim();
+    const filterJson = document.getElementById('fmFilterJson').value.trim();
+
+    const body = {};
+    if (sourceType) body.sourceType = sourceType;
+    if (sourceEntityIdRaw) body.sourceEntityId = Number(sourceEntityIdRaw);
+    if (sourceFieldIdRaw) body.sourceFieldId = Number(sourceFieldIdRaw);
+    if (fieldLabel) body.fieldLabel = fieldLabel;
+    if (fieldType) body.fieldType = fieldType;
+    if (aggregationType) body.aggregationType = aggregationType;
+    if (filterJson) body.filterJson = filterJson;
+
+    const data = await call('PATCH', `/api/admin/accounting/field-mappings/${mappingId}/testing`, body);
+    json('fieldMappingResult', data);
+}
+
+async function updateFormula() {
+    const id = document.getElementById('formulaId').value;
+    const body = {
+        name: document.getElementById('formulaName').value || null,
+        description: document.getElementById('formulaDescription').value || null,
+        formulaType: document.getElementById('formulaType').value || null,
+        expressionJson: document.getElementById('formulaJson').value || null
+    };
+    await call('PATCH', `/api/admin/accounting/formulas/${id}/testing`, body);
+}
+
+async function getFormulaDetail() {
+    const id = document.getElementById('formulaId').value;
+    if (!id) return;
+    const data = await call('GET', `/api/admin/accounting/formulas/${id}`);
+    bindFormula(data);
+}
+
+function pickFormula(id) {
+    document.getElementById('formulaId').value = id;
+    const impactSelect = document.getElementById('impactFormulaSelect');
+    if (impactSelect && Array.from(impactSelect.options).some(o => Number(o.value) === Number(id))) {
+        impactSelect.value = id;
+    }
+    getFormulaDetail();
+}
+
+function bindFormula(data) {
+    if (!data) return;
+    document.getElementById('formulaId').value = data.formulaId ?? '';
+    document.getElementById('formulaName').value = data.name ?? '';
+    document.getElementById('formulaType').value = data.formulaType ?? '';
+    document.getElementById('formulaDescription').value = data.description ?? '';
+    document.getElementById('formulaJson').value = data.expressionJson ?? '';
+    json('formulaDetail', data);
+}
+async function cloneFormula() {
+    const id = document.getElementById('formulaId').value;
+    await call('POST', `/api/admin/accounting/formulas/${id}/clone`, {});
+}
+
+async function loadTemplateFormulasForImpact() {
+    const templateVersionId = Number(document.getElementById('impactTemplateVersionId').value);
+    if (!templateVersionId) {
+        json('impactFormulaList', { message: 'TemplateVersionId is required' });
+        return;
+    }
+
+    const formulas = await call('GET', `/api/admin/accounting/template-versions/${templateVersionId}/formulas`);
+    const list = formulas || [];
+    const select = document.getElementById('impactFormulaSelect');
+    select.innerHTML = list.length
+        ? list.map(f => `<option value="${f.formulaId}">${f.formulaId} - ${f.code} (${f.name})</option>`).join('')
+        : '<option value="">No formulas</option>';
+
+    json('impactFormulaList', list);
+
+    if (list.length) {
+        const firstFormulaId = list[0].formulaId;
+        document.getElementById('formulaId').value = firstFormulaId;
+        document.getElementById('pTemplateVersion').value = templateVersionId;
+        await getFormulaDetail();
+    }
+}
+
+async function captureImpactBaseline() {
+    const body = getPreviewRequestFromInputs();
+    const errors = validatePreviewRequest(body);
+    if (errors.length) {
+        json('impactDiff', { message: 'Invalid preview request', errors });
+        return;
+    }
+
+    impactBeforePreview = await call('POST', '/api/admin/accounting/testing/preview', body);
+    json('impactDiff', { status: 'baseline-captured', summary: impactBeforePreview?.summary || null });
+}
+
+function diffObject(before, after) {
+    const keys = Array.from(new Set([...(Object.keys(before || {})), ...(Object.keys(after || {}))]));
+    const changed = [];
+    for (const k of keys) {
+        const b = before?.[k];
+        const a = after?.[k];
+        if (JSON.stringify(b) !== JSON.stringify(a)) {
+            changed.push({ field: k, before: b ?? null, after: a ?? null });
+        }
+    }
+    return changed;
+}
+
+async function applyFormulaAndCompareImpact() {
+    if (!impactBeforePreview) {
+        json('impactDiff', { message: 'Please capture baseline first (step 1)' });
+        return;
+    }
+
+    const selectedFormulaId = Number(document.getElementById('impactFormulaSelect').value || document.getElementById('formulaId').value);
+    if (!selectedFormulaId) {
+        json('impactDiff', { message: 'Please choose a formula in template' });
+        return;
+    }
+
+    document.getElementById('formulaId').value = selectedFormulaId;
+    await updateFormula();
+
+    const body = getPreviewRequestFromInputs();
+    const errors = validatePreviewRequest(body);
+    if (errors.length) {
+        json('impactDiff', { message: 'Invalid preview request', errors });
+        return;
+    }
+
+    const afterPreview = await call('POST', '/api/admin/accounting/testing/preview', body);
+
+    const rowIndex = Number(document.getElementById('impactRowIndex').value || 0);
+    const beforeRow = impactBeforePreview?.rows?.items?.[rowIndex] || null;
+    const afterRow = afterPreview?.rows?.items?.[rowIndex] || null;
+
+    const summaryDiff = diffObject(impactBeforePreview?.summary || {}, afterPreview?.summary || {});
+    const rowDiff = diffObject(beforeRow || {}, afterRow || {});
+
+    json('impactDiff', {
+        rowIndex,
+        summaryDiff,
+        rowDiff,
+        beforeSummary: impactBeforePreview?.summary || null,
+        afterSummary: afterPreview?.summary || null
+    });
+}
+
+async function preview() {
+    const body = getPreviewRequestFromInputs();
+    const errors = validatePreviewRequest(body);
+    if (errors.length) {
+        json('previewBox', { message: 'Invalid preview request', errors });
+        return;
+    }
+
+    const data = await call('POST', '/api/admin/accounting/testing/preview', body);
+    json('previewBox', data);
+}
+
+// ══════════ Reference ══════════
+let refCache = null;
+async function loadReference() {
+    const data = await call('GET', '/api/admin/accounting/reference');
+    refCache = data;
+    const grid = document.getElementById('refGrid');
+    grid.innerHTML = '';
+    for (const [key, arr] of Object.entries(data || {})) {
+        const items = arr || [];
+        grid.innerHTML += `<div class="col"><h3>${key}</h3><div class="table-wrap"><table>
+            <thead><tr><th>Value</th><th>Description</th></tr></thead>
+            <tbody>${items.map(i => `<tr><td>${i.value}</td><td>${i.description || ''}</td></tr>`).join('')}</tbody>
+        </table></div></div>`;
+    }
+    populateRefDropdowns(data);
+}
+function populateRefDropdowns(ref) {
+    fillSelect('rdRowType', ref?.rowTypes || []);
+    fillSelect('rdPosition', ref?.positions || []);
+    const st = document.getElementById('rdSectionType');
+    st.innerHTML = '<option value="">—</option>' + (ref?.sectionTypes || []).map(i => `<option value="${i.value}">${i.value}</option>`).join('');
+}
+function fillSelect(id, items) {
+    const el = document.getElementById(id);
+    el.innerHTML = items.map(i => `<option value="${i.value}">${i.value}</option>`).join('');
+}
+
+// ══════════ Mappable Entities ══════════
+async function loadEntities(activeOnly) {
+    const q = activeOnly ? '?active=true' : '';
+    const data = await call('GET', `/api/admin/accounting/mappable-entities${q}`);
+    const list = data || [];
+    const tbody = document.getElementById('entitiesBody');
+    tbody.innerHTML = list.length
+        ? list.map(e => `<tr>
+            <td>${e.entityId}</td><td>${e.entityCode}</td><td>${e.tableName}</td>
+            <td>${e.isActive ? 'Yes' : 'No'}</td>
+            <td><button class="alt" onclick="loadEntityDetail(${e.entityId})">Detail</button></td></tr>`).join('')
+        : '<tr><td colspan="5" class="muted">No entities</td></tr>';
+}
+async function loadEntityDetail(entityId) {
+    const data = await call('GET', `/api/admin/accounting/mappable-entities/${entityId}`);
+    json('entityFields', data);
+    document.getElementById('mfEntityId').value = entityId;
+}
+async function saveEntity() {
+    const id = document.getElementById('meId').value;
+    const body = {
+        entityCode: document.getElementById('meCode').value || null,
+        tableName: document.getElementById('meTable').value || null,
+        displayName: document.getElementById('meDisplay').value || null,
+        isActive: document.getElementById('meActive').value === 'true'
+    };
+    if (id) {
+        await call('PATCH', `/api/admin/accounting/mappable-entities/${id}`, body);
+    } else {
+        await call('POST', '/api/admin/accounting/mappable-entities', body);
+    }
+    await loadEntities();
+}
+async function saveField() {
+    const fieldId = document.getElementById('mfId').value;
+    const entityId = document.getElementById('mfEntityId').value;
+    const body = {
+        fieldCode: document.getElementById('mfCode').value || null,
+        columnName: document.getElementById('mfColumn').value || null,
+        dataType: document.getElementById('mfDataType').value || null,
+        displayName: document.getElementById('mfDisplay').value || null
+    };
+    if (fieldId) {
+        await call('PATCH', `/api/admin/accounting/mappable-fields/${fieldId}`, body);
+    } else {
+        await call('POST', `/api/admin/accounting/mappable-entities/${entityId}/fields`, body);
+    }
+    if (entityId) await loadEntityDetail(Number(entityId));
+}
+
+// ══════════ Full Structure ══════════
+async function loadFullStructure() {
+    const id = document.getElementById('fsVersionId').value;
+    const data = await call('GET', `/api/admin/accounting/template-versions/${id}/full-structure`);
+    document.getElementById('fsPreview').textContent = data?.renderPreview || '';
+    // mappings table
+    const maps = data?.fieldMappings || [];
+    document.getElementById('fsMappingsBody').innerHTML = maps.length
+        ? maps.map(m => `<tr>
+            <td>${m.mappingId}</td><td>${m.fieldCode}</td><td>${m.fieldLabel || ''}</td>
+            <td>${m.sourceType || ''}</td><td>${m.sourceEntityCode || ''}</td><td>${m.sourceFieldCode || ''}</td>
+            <td><button class="warn" onclick="quickDeleteMapping(${m.mappingId})">×</button></td></tr>`).join('')
+        : '<tr><td colspan="7" class="muted">No mappings</td></tr>';
+    // row defs table
+    const rows = data?.rowDefinitions || [];
+    document.getElementById('fsRowDefsBody').innerHTML = rows.length
+        ? rows.map(r => `<tr>
+            <td>${r.rowDefinitionId}</td><td>${r.rowType}</td><td>${r.position}</td>
+            <td>${r.displayLabel || ''}</td><td>${r.sectionType || ''}</td><td>${r.sectionFilterValue || ''}</td>
+            <td>${r.formulaCode || ''}</td>
+            <td><button class="warn" onclick="quickDeleteRowDef(${r.rowDefinitionId})">×</button></td></tr>`).join('')
+        : '<tr><td colspan="8" class="muted">No row defs</td></tr>';
+}
+async function quickDeleteMapping(id) {
+    if (!confirm('Delete mapping #' + id + '?')) return;
+    await call('DELETE', `/api/admin/accounting/field-mappings/${id}`);
+    await loadFullStructure();
+}
+async function quickDeleteRowDef(id) {
+    if (!confirm('Delete row def #' + id + '?')) return;
+    await call('DELETE', `/api/admin/accounting/row-definitions/${id}`);
+    await loadFullStructure();
+}
+
+// ══════════ Row Definitions ══════════
+async function loadRowDefs() {
+    const id = document.getElementById('rdVersionId').value;
+    const data = await call('GET', `/api/admin/accounting/template-versions/${id}/row-definitions`);
+    const list = data || [];
+    document.getElementById('rowDefsBody').innerHTML = list.length
+        ? list.map(r => `<tr>
+            <td>${r.rowDefinitionId}</td><td>${r.rowType}</td><td>${r.position}</td>
+            <td>${r.displayLabel || ''}</td><td>${r.sectionType || ''}</td><td>${r.sectionFilterValue || ''}</td>
+            <td>${r.formulaId ?? ''}</td><td class="mini">${r.visibleFieldCodes || ''}</td>
+            <td><button class="alt" onclick="editRowDef(${r.rowDefinitionId},'${r.rowType}','${r.position}','${(r.displayLabel||'').replace(/'/g,"\\'")}',${r.sortOrder??0},'${r.sectionType||''}','${r.sectionFilterValue||''}',${r.formulaId??'null'},'${(r.visibleFieldCodes||'[]').replace(/'/g,"\\'")}')">Edit</button>
+            <button class="warn" onclick="deleteRowDef(${r.rowDefinitionId})">Del</button></td></tr>`).join('')
+        : '<tr><td colspan="9" class="muted">No data</td></tr>';
+    if (!refCache) await loadReference();
+}
+function editRowDef(id, rowType, position, label, sort, sectionType, sectionFilter, formulaId, visibleFields) {
+    document.getElementById('rdId').value = id;
+    document.getElementById('rdRowType').value = rowType;
+    document.getElementById('rdPosition').value = position;
+    document.getElementById('rdLabel').value = label;
+    document.getElementById('rdSort').value = sort;
+    document.getElementById('rdSectionType').value = sectionType;
+    document.getElementById('rdSectionFilter').value = sectionFilter;
+    document.getElementById('rdFormulaId').value = formulaId ?? '';
+    document.getElementById('rdVisibleFields').value = visibleFields;
+}
+async function saveRowDef() {
+    const id = document.getElementById('rdId').value;
+    const versionId = document.getElementById('rdVersionId').value;
+    const body = {
+        rowType: document.getElementById('rdRowType').value || null,
+        position: document.getElementById('rdPosition').value || null,
+        displayLabel: document.getElementById('rdLabel').value || null,
+        sortOrder: Number(document.getElementById('rdSort').value) || 0,
+        sectionType: document.getElementById('rdSectionType').value || null,
+        sectionFilterValue: document.getElementById('rdSectionFilter').value || null,
+        formulaId: Number(document.getElementById('rdFormulaId').value) || null,
+        visibleFieldCodes: document.getElementById('rdVisibleFields').value || null
+    };
+    if (id) {
+        await call('PATCH', `/api/admin/accounting/row-definitions/${id}`, body);
+    } else {
+        await call('POST', `/api/admin/accounting/template-versions/${versionId}/row-definitions`, body);
+    }
+    if (versionId) await loadRowDefs();
+}
+async function deleteRowDef(id) {
+    if (!confirm('Delete row definition #' + id + '?')) return;
+    await call('DELETE', `/api/admin/accounting/row-definitions/${id}`);
+    await loadRowDefs();
+}
+
+// ══════════ Field Mappings Create/Delete ══════════
+async function createFieldMapping() {
+    const versionId = document.getElementById('fmcVersionId').value;
+    const body = {
+        fieldCode: document.getElementById('fmcFieldCode').value || null,
+        fieldLabel: document.getElementById('fmcFieldLabel').value || null,
+        fieldType: document.getElementById('fmcFieldType').value || null,
+        sourceType: document.getElementById('fmcSourceType').value || null,
+        sourceEntityId: Number(document.getElementById('fmcSourceEntityId').value) || null,
+        sourceFieldId: Number(document.getElementById('fmcSourceFieldId').value) || null,
+        aggregationType: document.getElementById('fmcAggType').value || null,
+        formulaId: Number(document.getElementById('fmcFormulaId').value) || null,
+        filterJson: document.getElementById('fmcFilter').value || null
+    };
+    await call('POST', `/api/admin/accounting/template-versions/${versionId}/field-mappings`, body);
+}
+async function deleteFieldMapping() {
+    const id = document.getElementById('fmcDelId').value;
+    if (!id || !confirm('Delete mapping #' + id + '?')) return;
+    await call('DELETE', `/api/admin/accounting/field-mappings/${id}`);
+}
+</script>
+</body>
+</html>

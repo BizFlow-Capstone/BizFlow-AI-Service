@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BizFlow Admin — Formula & Compare Lab</title>
+    <style>
+        :root { --bg:#0b1020; --panel:#131a2e; --line:#253052; --txt:#e7ecff; --muted:#9aa8d6; --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; --accent:#2e4fff; }
+        * { box-sizing:border-box; }
+        body { margin:0; font-family:'Segoe UI',Arial,sans-serif; background:linear-gradient(120deg,#0b1020,#131a2e 45%,#0f1630); color:var(--txt); }
+        .wrap { max-width:1400px; margin:0 auto; padding:16px; }
+        .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:14px; }
+        h1 { font-size:22px; margin:0 0 12px; }
+        h2 { font-size:16px; margin:0 0 10px; color:var(--ok); }
+        h3 { font-size:14px; margin:0 0 8px; }
+        .row { display:flex; gap:10px; flex-wrap:wrap; }
+        .col { flex:1 1 240px; }
+        label { font-size:12px; color:var(--muted); display:block; margin-bottom:4px; }
+        input,textarea,select { width:100%; background:#0f1630; color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:13px; }
+        textarea { min-height:90px; font-family:Consolas,monospace; }
+        button { background:var(--accent); color:white; border:none; padding:9px 14px; border-radius:8px; cursor:pointer; font-size:13px; }
+        button.alt { background:#334155; }
+        button.warn { background:#7c2d12; }
+        button.ok { background:#166534; }
+        .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+        .muted { color:var(--muted); font-size:12px; }
+        .log { max-height:400px; overflow:auto; background:#0a1022; border:1px solid var(--line); border-radius:8px; padding:10px; font-family:Consolas,monospace; font-size:12px; white-space:pre-wrap; }
+        .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; margin-bottom:12px; }
+        .kpi { background:#0f1630; border:1px solid var(--line); border-radius:10px; padding:10px; }
+        .kpi .label { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.3px; }
+        .kpi .value { font-size:20px; font-weight:700; margin-top:4px; }
+        .table-wrap { max-height:320px; overflow:auto; border:1px solid var(--line); border-radius:8px; }
+        table { width:100%; border-collapse:collapse; font-size:12px; }
+        th,td { border-bottom:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top; }
+        th { color:var(--muted); font-size:11px; text-transform:uppercase; position:sticky; top:0; background:var(--panel); }
+        .diff-add { background:rgba(34,197,94,.12); }
+        .diff-del { background:rgba(239,68,68,.12); }
+        .diff-chg { background:rgba(245,158,11,.12); }
+        .tabs { display:flex; gap:4px; margin-bottom:10px; }
+        .tab { padding:8px 16px; border-radius:8px 8px 0 0; cursor:pointer; background:#0f1630; border:1px solid var(--line); border-bottom:none; color:var(--muted); }
+        .tab.active { background:var(--panel); color:var(--ok); font-weight:600; }
+        .tab-content { display:none; }
+        .tab-content.active { display:block; }
+        .tree { padding-left:16px; border-left:2px solid var(--line); margin-left:8px; }
+        .tree-node { padding:6px 0; }
+        .tree-node .node-badge { display:inline-block; padding:2px 8px; border-radius:6px; font-size:11px; font-weight:600; }
+        .tree-node .node-badge.literal { background:#1e3a5f; color:#60a5fa; }
+        .tree-node .node-badge.ref { background:#3b1f5e; color:#c084fc; }
+        .tree-node .node-badge.aggregate { background:#1f3b1f; color:#86efac; }
+        .tree-node .node-badge.lookup { background:#3b3b1f; color:#fde047; }
+        .tree-node .node-badge.op { background:#3b1f1f; color:#fca5a5; }
+        .tree-node .node-badge.fn { background:#1f3b3b; color:#67e8f9; }
+        .tree-node .node-badge.context { background:#2d2d2d; color:#d4d4d4; }
+        .tree-node .node-value { font-weight:700; margin-left:8px; }
+        .tree-node .node-debug { color:var(--err); font-size:11px; margin-left:8px; }
+        .schema-card { background:#0f1630; border:1px solid var(--line); border-radius:8px; padding:10px; margin-bottom:8px; }
+        .schema-card h4 { margin:0 0 6px; font-size:13px; color:var(--ok); }
+        .schema-field { font-size:12px; padding:2px 0; }
+        .schema-field .fname { color:#60a5fa; font-weight:600; }
+        .schema-field .ftype { color:var(--muted); }
+        .schema-field .freq { color:var(--err); font-size:10px; }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <h1>🧪 Admin Formula & Compare Lab</h1>
+
+    <!-- ── Config ── -->
+    <div class="card">
+        <h2>⚙️ Config</h2>
+        <div class="row">
+            <div class="col"><label>Base URL</label><input id="baseUrl" value="http://localhost:7270" /></div>
+            <div class="col"><label>Bearer Token</label><input id="token" placeholder="eyJ..." /></div>
+        </div>
+        <div class="actions">
+            <button onclick="loadReference()">Load Reference</button>
+            <button onclick="loadNodeSchemas()">Load Node Schemas</button>
+            <button onclick="loadOverview()">Load Overview</button>
+        </div>
+    </div>
+
+    <!-- ── Tabs ── -->
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab('tabRef')">📋 Reference</div>
+        <div class="tab" onclick="switchTab('tabExplain')">💡 Formula Explain</div>
+        <div class="tab" onclick="switchTab('tabCompare')">⚖️ Compare</div>
+        <div class="tab" onclick="switchTab('tabTrace')">🔍 Trace</div>
+        <div class="tab" onclick="switchTab('tabSchema')">🧩 Node Schema</div>
+    </div>
+
+    <!-- ══════════ TAB: Reference ══════════ -->
+    <div id="tabRef" class="tab-content active">
+        <div class="card">
+            <h2>Reference Data (enriched)</h2>
+            <div id="refGrid" class="row"></div>
+        </div>
+    </div>
+
+    <!-- ══════════ TAB: Formula Explain ══════════ -->
+    <div id="tabExplain" class="tab-content">
+        <div class="card">
+            <h2>Formula Explanation</h2>
+            <p class="muted">Chọn formula từ Overview → xem giải thích tự động bằng tiếng Việt</p>
+            <div class="row">
+                <div class="col"><label>FormulaId</label><input id="explainFormulaId" type="number" /></div>
+                <div class="col" style="flex:2"><label>Quick Load</label><select id="formulaQuickSelect" onchange="quickSelectFormula(this.value)"><option value="">— Chọn formula —</option></select></div>
+            </div>
+            <div class="actions">
+                <button onclick="loadFormulaExplanation()">Get Formula + Explanation</button>
+            </div>
+            <div class="row" style="margin-top:12px;">
+                <div class="col">
+                    <h3>Formula Info</h3>
+                    <div class="kpis">
+                        <div class="kpi"><div class="label">Code</div><div id="fxCode" class="value" style="font-size:14px;">—</div></div>
+                        <div class="kpi"><div class="label">Type</div><div id="fxType" class="value" style="font-size:14px;">—</div></div>
+                        <div class="kpi"><div class="label">Active</div><div id="fxActive" class="value" style="font-size:14px;">—</div></div>
+                    </div>
+                    <h3>Explanation (auto-generated)</h3>
+                    <div id="fxExplanation" class="log" style="min-height:60px; font-size:14px; color:var(--ok);"></div>
+                </div>
+                <div class="col">
+                    <h3>ExpressionJson</h3>
+                    <div id="fxJson" class="log" style="min-height:120px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════ TAB: Compare ══════════ -->
+    <div id="tabCompare" class="tab-content">
+        <div class="card">
+            <h2>Compare Active vs Draft</h2>
+            <p class="muted">So sánh kết quả rendering giữa version đang active và draft version</p>
+            <div class="row">
+                <div class="col"><label>LocationId</label><input id="cmpLocation" type="number" value="6" /></div>
+                <div class="col"><label>PeriodId</label><input id="cmpPeriod" type="number" value="1" /></div>
+                <div class="col"><label>Draft VersionId</label><input id="cmpDraftVersion" type="number" /></div>
+                <div class="col"><label>Active VersionId (optional)</label><input id="cmpActiveVersion" type="number" /></div>
+            </div>
+            <div class="row">
+                <div class="col"><label>GroupNumber</label><input id="cmpGroup" type="number" value="2" /></div>
+                <div class="col"><label>TaxMethod</label><input id="cmpMethod" value="method_1" /></div>
+                <div class="col"><label>RulesetId</label><input id="cmpRuleset" type="number" value="1" /></div>
+                <div class="col"><label>BatchSize</label><input id="cmpBatch" type="number" value="20" /></div>
+            </div>
+            <label>BusinessTypeIds (comma-separated GUIDs, optional)</label>
+            <input id="cmpBusinessTypeIds" placeholder="guid1,guid2" />
+            <div class="actions">
+                <button onclick="runCompare()">Run Compare</button>
+            </div>
+
+            <!-- Diff summary -->
+            <div style="margin-top:12px;">
+                <h3>Formula Value Changes</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Code</th><th>Active (Before)</th><th>Draft (After)</th><th>Δ Change</th></tr></thead>
+                        <tbody id="cmpDiffBody"><tr><td colspan="4" class="muted">Run compare to see results</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="row" style="margin-top:12px;">
+                <div class="col">
+                    <h3>Active Version Summary</h3>
+                    <div id="cmpActiveSummary" class="log" style="min-height:80px;"></div>
+                </div>
+                <div class="col">
+                    <h3>Draft Version Summary</h3>
+                    <div id="cmpDraftSummary" class="log" style="min-height:80px;"></div>
+                </div>
+            </div>
+            <div class="row" style="margin-top:10px;">
+                <div class="col">
+                    <h3>Active Rows (first batch)</h3>
+                    <div id="cmpActiveRows" class="log" style="min-height:80px;"></div>
+                </div>
+                <div class="col">
+                    <h3>Draft Rows (first batch)</h3>
+                    <div id="cmpDraftRows" class="log" style="min-height:80px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════ TAB: Trace ══════════ -->
+    <div id="tabTrace" class="tab-content">
+        <div class="card">
+            <h2>Formula Trace (Debug)</h2>
+            <p class="muted">Chạy dry-run 1 formula, xem từng bước evaluate để debug</p>
+            <div class="row">
+                <div class="col"><label>FormulaId</label><input id="traceFormulaId" type="number" /></div>
+                <div class="col"><label>LocationId</label><input id="traceLocation" type="number" value="6" /></div>
+                <div class="col"><label>PeriodId</label><input id="tracePeriod" type="number" value="1" /></div>
+                <div class="col"><label>RulesetId</label><input id="traceRuleset" type="number" value="1" /></div>
+            </div>
+            <label>BusinessTypeIds (comma-separated GUIDs, optional)</label>
+            <input id="traceBusinessTypeIds" placeholder="guid1,guid2" />
+            <div class="actions">
+                <button onclick="runTrace()">Run Trace</button>
+            </div>
+
+            <div style="margin-top:12px;">
+                <div class="kpis">
+                    <div class="kpi"><div class="label">Formula</div><div id="traceCode" class="value" style="font-size:14px;">—</div></div>
+                    <div class="kpi"><div class="label">Final Value</div><div id="traceFinal" class="value">—</div></div>
+                </div>
+                <h3>Execution Tree</h3>
+                <div id="traceTree" class="log" style="min-height:120px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════ TAB: Node Schema ══════════ -->
+    <div id="tabSchema" class="tab-content">
+        <div class="card">
+            <h2>Formula Node Schemas (Guided Form Reference)</h2>
+            <p class="muted">Schema cho mỗi loại node trong ExpressionJson — FE dùng để render form builder</p>
+            <div class="actions"><button onclick="loadNodeSchemas()">Load Schemas</button></div>
+            <div id="schemaGrid" style="margin-top:12px;"></div>
+        </div>
+    </div>
+
+    <!-- ── API Log ── -->
+    <div class="card">
+        <h2>📝 API Log</h2>
+        <div class="actions"><button class="alt" onclick="document.getElementById('log').textContent=''">Clear</button></div>
+        <div id="log" class="log" style="margin-top:8px;"></div>
+    </div>
+</div>
+
+<script>
+// ══════════ Helpers ══════════
+function headers() {
+    const t = document.getElementById('token').value.trim();
+    const h = {'Content-Type':'application/json'};
+    if (t) h.Authorization = `Bearer ${t}`;
+    return h;
+}
+function base() { return document.getElementById('baseUrl').value.trim(); }
+function log(msg) {
+    const el = document.getElementById('log');
+    el.textContent = `[${new Date().toLocaleTimeString()}] ${msg}\n\n` + el.textContent;
+}
+async function api(method, path, body) {
+    const url = `${base()}${path}`;
+    const opt = { method, headers: headers() };
+    if (body !== undefined) opt.body = JSON.stringify(body);
+    const res = await fetch(url, opt);
+    const txt = await res.text();
+    let data = txt;
+    try { data = JSON.parse(txt); } catch {}
+    log(`${method} ${path} → ${res.status}\n${typeof data === 'string' ? data : JSON.stringify(data, null, 2)}`);
+    if (!res.ok) throw new Error(`${res.status}: ${typeof data === 'string' ? data : JSON.stringify(data)}`);
+    return data?.data ?? data;
+}
+function json(el, data) { document.getElementById(el).textContent = JSON.stringify(data, null, 2); }
+function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('vi-VN'); }
+
+// ══════════ Tabs ══════════
+function switchTab(id) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    event.target.classList.add('active');
+}
+
+// ══════════ Reference (enriched) ══════════
+async function loadReference() {
+    const data = await api('GET', '/api/admin/accounting/reference');
+    const grid = document.getElementById('refGrid');
+    grid.innerHTML = '';
+    for (const [key, arr] of Object.entries(data || {})) {
+        const items = arr || [];
+        grid.innerHTML += `<div class="col"><h3>${key}</h3><div class="table-wrap"><table>
+            <thead><tr><th>Value</th><th>Label</th><th>Desc</th></tr></thead>
+            <tbody>${items.map(i => `<tr>
+                <td><code>${i.value}</code></td>
+                <td>${i.label || ''}</td>
+                <td class="muted">${i.description || ''}${i.example ? `<br><code style="font-size:10px;">${escHtml(i.example)}</code>` : ''}</td>
+            </tr>`).join('')}</tbody>
+        </table></div></div>`;
+    }
+}
+function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ══════════ Overview (for formula dropdown) ══════════
+async function loadOverview() {
+    const data = await api('GET', '/api/admin/accounting/overview');
+    const formulas = data?.formulas || [];
+    const sel = document.getElementById('formulaQuickSelect');
+    sel.innerHTML = '<option value="">— Chọn formula —</option>' +
+        formulas.map(f => `<option value="${f.formulaId}">${f.formulaId} — ${f.code} (${f.name})</option>`).join('');
+}
+function quickSelectFormula(id) {
+    if (!id) return;
+    document.getElementById('explainFormulaId').value = id;
+    document.getElementById('traceFormulaId').value = id;
+    loadFormulaExplanation();
+}
+
+// ══════════ Formula Explanation ══════════
+async function loadFormulaExplanation() {
+    const id = document.getElementById('explainFormulaId').value;
+    if (!id) return alert('Nhập FormulaId');
+    const data = await api('GET', `/api/admin/accounting/formulas/${id}`);
+    document.getElementById('fxCode').textContent = data.code || '—';
+    document.getElementById('fxType').textContent = data.formulaType || '—';
+    document.getElementById('fxActive').textContent = data.isActive ? '✅ Yes' : '❌ No';
+    document.getElementById('fxExplanation').textContent = data.explanation || '(không có)';
+    try {
+        const parsed = JSON.parse(data.expressionJson || '{}');
+        document.getElementById('fxJson').textContent = JSON.stringify(parsed, null, 2);
+    } catch {
+        document.getElementById('fxJson').textContent = data.expressionJson || '';
+    }
+}
+
+// ══════════ Compare ══════════
+async function runCompare() {
+    const idsRaw = document.getElementById('cmpBusinessTypeIds').value.trim();
+    const body = {
+        businessLocationId: Number(document.getElementById('cmpLocation').value),
+        periodId: Number(document.getElementById('cmpPeriod').value),
+        draftVersionId: Number(document.getElementById('cmpDraftVersion').value),
+        activeVersionId: Number(document.getElementById('cmpActiveVersion').value) || null,
+        groupNumber: Number(document.getElementById('cmpGroup').value),
+        taxMethod: document.getElementById('cmpMethod').value,
+        rulesetId: Number(document.getElementById('cmpRuleset').value),
+        batchSize: Number(document.getElementById('cmpBatch').value),
+        businessTypeIds: idsRaw ? idsRaw.split(',').map(x => x.trim()).filter(Boolean) : []
+    };
+
+    const data = await api('POST', '/api/admin/accounting/testing/compare', body);
+
+    // Diff table
+    const changes = data?.diff?.valueChanges || [];
+    const tbody = document.getElementById('cmpDiffBody');
+    if (changes.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="muted">Không có thay đổi formula values</td></tr>';
+    } else {
+        tbody.innerHTML = changes.map(c => {
+            const delta = c.after - c.before;
+            const cls = delta > 0 ? 'diff-add' : delta < 0 ? 'diff-del' : '';
+            return `<tr class="${cls}">
+                <td><strong>${c.code}</strong></td>
+                <td>${fmt(c.before)}</td>
+                <td>${fmt(c.after)}</td>
+                <td>${delta > 0 ? '+' : ''}${fmt(delta)}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    // Summaries
+    json('cmpActiveSummary', data?.active?.summary || {});
+    json('cmpDraftSummary', data?.draft?.summary || {});
+
+    // Rows
+    json('cmpActiveRows', data?.active?.rows?.items?.slice(0, 10) || []);
+    json('cmpDraftRows', data?.draft?.rows?.items?.slice(0, 10) || []);
+}
+
+// ══════════ Trace ══════════
+async function runTrace() {
+    const idsRaw = document.getElementById('traceBusinessTypeIds').value.trim();
+    const body = {
+        formulaId: Number(document.getElementById('traceFormulaId').value),
+        businessLocationId: Number(document.getElementById('traceLocation').value),
+        periodId: Number(document.getElementById('tracePeriod').value),
+        rulesetId: Number(document.getElementById('traceRuleset').value),
+        businessTypeIds: idsRaw ? idsRaw.split(',').map(x => x.trim()).filter(Boolean) : []
+    };
+
+    const data = await api('POST', '/api/admin/accounting/testing/trace', body);
+    document.getElementById('traceCode').textContent = `${data.formulaCode} (${data.formulaName})`;
+    document.getElementById('traceFinal').textContent = fmt(data.finalValue);
+
+    // Render tree
+    const tree = document.getElementById('traceTree');
+    tree.innerHTML = '';
+    if (data.trace && data.trace.length) {
+        tree.innerHTML = data.trace.map(renderTraceNode).join('');
+    } else {
+        tree.textContent = '(no trace data)';
+    }
+}
+
+function renderTraceNode(node) {
+    const badge = `<span class="node-badge ${node.nodeType}">${node.nodeType}</span>`;
+    const desc = escHtml(node.description || '');
+    const val = `<span class="node-value">${fmt(node.resolvedValue)}</span>`;
+    const src = node.source ? `<span class="muted"> [${escHtml(node.source)}]</span>` : '';
+    const dbg = node.debug ? `<div class="node-debug">⚠ ${escHtml(node.debug)}</div>` : '';
+
+    let children = '';
+    if (node.children && node.children.length) {
+        children = `<div class="tree">${node.children.map(renderTraceNode).join('')}</div>`;
+    }
+
+    return `<div class="tree-node">
+        <div>#${node.step} ${badge} ${desc} → ${val}${src}</div>
+        ${dbg}${children}
+    </div>`;
+}
+
+// ══════════ Node Schema ══════════
+async function loadNodeSchemas() {
+    const data = await api('GET', '/api/admin/accounting/reference/formula-node-schemas');
+    const grid = document.getElementById('schemaGrid');
+    grid.innerHTML = '';
+    const list = data || [];
+    list.forEach(schema => {
+        const fieldsHtml = (schema.fields || []).map(f => {
+            const allowed = f.allowedValues ? ` <span class="ftype">[${f.allowedValues.join(', ')}]</span>` : '';
+            const req = f.required ? '<span class="freq"> *required</span>' : '';
+            return `<div class="schema-field">
+                <span class="fname">${f.fieldName}</span>
+                <span class="ftype"> : ${f.fieldType}</span>${req}${allowed}
+                ${f.description ? `<span class="muted"> — ${f.description}</span>` : ''}
+            </div>`;
+        }).join('');
+
+        grid.innerHTML += `<div class="schema-card">
+            <h4>${schema.nodeType} — ${schema.label}</h4>
+            <div class="muted" style="margin-bottom:6px;">${schema.description}</div>
+            ${schema.example ? `<div style="margin-bottom:6px;"><code style="font-size:11px;color:#60a5fa;">${escHtml(schema.example)}</code></div>` : ''}
+            <div style="border-top:1px solid var(--line);padding-top:6px;">${fieldsHtml}</div>
+        </div>`;
+    });
+}
+</script>
+</body>
+</html>

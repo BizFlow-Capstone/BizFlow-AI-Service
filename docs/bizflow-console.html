@@ -1,0 +1,1116 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BizFlow — Console kiểm thử API</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0c1222;
+      --bg2: #111827;
+      --card: #151d2e;
+      --card2: #1a2438;
+      --border: #2a3548;
+      --text: #e8edf7;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent2: #818cf8;
+      --ok: #4ade80;
+      --warn: #fbbf24;
+      --bad: #f87171;
+      --radius: 14px;
+      --shadow: 0 12px 40px rgba(0,0,0,.35);
+      --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "DM Sans", system-ui, sans-serif;
+      background: radial-gradient(1200px 600px at 10% -10%, rgba(56,189,248,.12), transparent),
+                  radial-gradient(800px 400px at 90% 0%, rgba(129,140,248,.1), transparent),
+                  var(--bg);
+      color: var(--text);
+    }
+    a { color: var(--accent); }
+    .shell { max-width: 1280px; margin: 0 auto; padding: 20px 16px 48px; }
+    header.top {
+      display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px;
+      margin-bottom: 20px;
+    }
+    header.top h1 { margin: 0; font-size: 1.65rem; font-weight: 700; letter-spacing: -0.02em; }
+    header.top p { margin: 6px 0 0; color: var(--muted); font-size: .92rem; max-width: 560px; line-height: 1.5; }
+    .brand { display: flex; gap: 12px; align-items: center; }
+    .logo {
+      width: 44px; height: 44px; border-radius: 12px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: grid; place-items: center; font-weight: 800; color: #0c1222; font-size: 1.1rem;
+    }
+    nav.tabs {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px;
+    }
+    nav.tabs button {
+      border: 1px solid var(--border); background: var(--card2); color: var(--muted);
+      padding: 10px 16px; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: .88rem;
+      transition: .15s ease;
+    }
+    nav.tabs button:hover { color: var(--text); border-color: #3d4f6a; }
+    nav.tabs button.active {
+      background: linear-gradient(135deg, rgba(56,189,248,.2), rgba(129,140,248,.15));
+      border-color: rgba(56,189,248,.45); color: var(--text);
+    }
+    .panel { display: none; animation: fade .2s ease; }
+    .panel.active { display: block; }
+    @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+    .card {
+      background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 18px; margin-bottom: 14px; box-shadow: var(--shadow);
+    }
+    .card h2 { margin: 0 0 14px; font-size: 1.05rem; font-weight: 700; color: var(--text); }
+    .grid { display: grid; gap: 12px; }
+    .g2 { grid-template-columns: repeat(2, 1fr); }
+    .g3 { grid-template-columns: repeat(3, 1fr); }
+    @media (max-width: 900px) { .g2, .g3 { grid-template-columns: 1fr; } }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    label { font-size: .78rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    input, select, textarea {
+      width: 100%; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px;
+      font-size: .92rem; background: var(--bg2); color: var(--text); outline: none;
+    }
+    input:focus, select:focus, textarea:focus { border-color: rgba(56,189,248,.5); box-shadow: 0 0 0 3px rgba(56,189,248,.12); }
+    textarea { min-height: 140px; font-family: var(--mono); font-size: .82rem; }
+    .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .btn {
+      border: 0; border-radius: 10px; padding: 10px 16px; font-weight: 700; font-size: .88rem;
+      cursor: pointer; font-family: inherit;
+    }
+    .btn-primary { background: linear-gradient(135deg, #0ea5e9, #6366f1); color: #fff; }
+    .btn-ghost { background: var(--card2); color: var(--text); border: 1px solid var(--border); }
+    .btn-ok { background: #166534; color: #fff; }
+    .btn-bad { background: #991b1b; color: #fff; }
+    .btn-muted { background: #334155; color: #cbd5e1; }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .hint { font-size: .8rem; color: var(--muted); line-height: 1.45; margin-top: 6px; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
+      font-size: .75rem; font-weight: 700; border: 1px solid var(--border); background: var(--bg2);
+    }
+    .pill.ok { border-color: rgba(74,222,128,.4); color: var(--ok); }
+    .pill.bad { border-color: rgba(248,113,113,.45); color: var(--bad); }
+    .pill.wait { border-color: rgba(251,191,36,.4); color: var(--warn); }
+    .out {
+      background: #0b1020; border: 1px solid #1e293b; border-radius: 12px; padding: 14px;
+      font-family: var(--mono); font-size: .78rem; color: #a5f3fc; max-height: 420px; overflow: auto;
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .meta { font-size: .82rem; color: var(--muted); margin-bottom: 8px; }
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
+    .preset-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+    .preset-grid .btn { font-size: .78rem; padding: 8px 12px; }
+    table.form-kv { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    table.form-kv th, table.form-kv td { border-bottom: 1px solid var(--border); padding: 6px; }
+    .statusline { font-size: .85rem; color: var(--muted); margin: 8px 0; }
+    .kbd { font-family: var(--mono); font-size: .75rem; background: var(--bg2); padding: 2px 6px; border-radius: 6px; }
+    .sub-banner {
+      border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; background: var(--bg2);
+      font-size: .9rem; line-height: 1.55; margin-bottom: 12px;
+    }
+    .sub-banner strong { color: var(--text); }
+    .sub-banner .line { color: var(--muted); font-size: .82rem; margin-top: 6px; }
+    .plan-wrap { max-height: 320px; overflow: auto; border: 1px solid var(--border); border-radius: 12px; }
+    table.plans { width: 100%; border-collapse: collapse; font-size: .82rem; }
+    table.plans th, table.plans td { border-bottom: 1px solid var(--border); padding: 10px 12px; text-align: left; vertical-align: top; }
+    table.plans th { position: sticky; top: 0; background: var(--card2); color: var(--muted); font-weight: 700; text-transform: uppercase; font-size: .72rem; letter-spacing: .04em; z-index: 1; }
+    table.plans tr:hover td { background: rgba(56,189,248,.06); }
+    table.plans .feat { color: var(--muted); font-size: .78rem; max-width: 280px; }
+    .quote-box {
+      margin-top: 12px; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(56,189,248,.35);
+      background: rgba(56,189,248,.08); font-size: .85rem; line-height: 1.5;
+    }
+    .quote-box .q-row { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 4px 0; }
+    .quote-box .q-label { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="top">
+      <div class="brand">
+        <div class="logo">B</div>
+        <div>
+          <h1>BizFlow Console</h1>
+          <p>Gộp kiểm thử Location / Product / Order / Import, Subscription, Firestore. Tab Subscription: xem <span class="kbd">GET /api/subscription-plans</span> (mua / nâng cấp), <span class="kbd">GET /api/subscriptions/current</span> sau thanh toán Stripe. Dropdown tham chiếu cache <span class="kbd">localStorage</span>. Cửa hàng: quota <span class="kbd">LOCATIONS</span> realtime.</p>
+        </div>
+      </div>
+    </header>
+
+    <nav class="tabs" id="mainTabs">
+      <button type="button" data-tab="conn" class="active">Kết nối</button>
+      <button type="button" data-tab="api">API &amp; Preset</button>
+      <button type="button" data-tab="ref">Dropdown &amp; cache</button>
+      <button type="button" data-tab="loc">Cửa hàng (LOCATIONS)</button>
+      <button type="button" data-tab="sub">Subscription</button>
+      <button type="button" data-tab="fb">Firestore</button>
+    </nav>
+
+    <!-- Kết nối -->
+    <section class="panel active" id="panel-conn">
+      <div class="card">
+        <h2>Cấu hình</h2>
+        <div class="grid g3">
+          <div class="field"><label>Base API URL</label><input id="baseUrl" value="http://localhost:8080" /></div>
+          <div class="field"><label>JWT Bearer</label><input id="token" placeholder="eyJhbGciOi..." /></div>
+          <div class="field"><label>DeviceInfo (login)</label><input id="deviceInfo" value="bizflow-console" /></div>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <button type="button" class="btn btn-ghost" id="btnSaveCfg">Lưu cục bộ</button>
+          <button type="button" class="btn btn-ghost" id="btnLoadCfg">Nạp cục bộ</button>
+          <span class="hint">Key: <span class="kbd">bizflow_console_cfg_v1</span></span>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Đăng nhập nhanh</h2>
+        <div class="grid g3">
+          <div class="field"><label>Email</label><input id="loginEmail" placeholder="user@mail.com" /></div>
+          <div class="field"><label>Phone</label><input id="loginPhone" placeholder="09…" /></div>
+          <div class="field"><label>Password</label><input id="loginPassword" type="password" /></div>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <button type="button" class="btn btn-ok" id="btnLoginEmail">Login Email</button>
+          <button type="button" class="btn btn-ok" id="btnLoginPhone">Login Phone</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- API -->
+    <section class="panel" id="panel-api">
+      <div class="card">
+        <h2>Preset nhanh</h2>
+        <div class="grid g2">
+          <div class="field"><label>Preset</label><select id="presetSelect"></select></div>
+          <div class="field"><label>Body</label><select id="bodyMode"><option value="json">JSON</option><option value="form">multipart/form-data</option><option value="none">Không body</option></select></div>
+        </div>
+        <div class="row" style="margin-top:10px;">
+          <button type="button" class="btn btn-ghost" id="btnApplyPreset">Áp preset</button>
+        </div>
+        <div class="preset-grid" style="margin-top:14px;">
+          <span class="pill">Location</span>
+          <button type="button" class="btn btn-ghost quick" data-key="loc-owned">Owned</button>
+          <button type="button" class="btn btn-ghost quick" data-key="loc-work">Work-at</button>
+          <button type="button" class="btn btn-ghost quick" data-key="loc-create">Create</button>
+          <span class="pill">Product</span>
+          <button type="button" class="btn btn-ghost quick" data-key="prd-list">List</button>
+          <button type="button" class="btn btn-ghost quick" data-key="prd-create">Create (form)</button>
+          <span class="pill">Order</span>
+          <button type="button" class="btn btn-ghost quick" data-key="ord-list">List</button>
+          <button type="button" class="btn btn-ghost quick" data-key="ord-create">Create</button>
+          <span class="pill">Import</span>
+          <button type="button" class="btn btn-ghost quick" data-key="imp-list">List</button>
+          <button type="button" class="btn btn-ghost quick" data-key="imp-create">Create</button>
+          <span class="pill">Sub</span>
+          <button type="button" class="btn btn-ghost quick" data-key="sub-current-self">Current</button>
+          <button type="button" class="btn btn-ghost quick" data-key="sub-plans">Plans (public)</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Request</h2>
+        <div class="grid g3">
+          <div class="field"><label>Method</label>
+            <select id="method"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select>
+          </div>
+          <div class="field" style="grid-column: span 2;"><label>Path</label><input id="path" placeholder="/api/location/me/owned" /></div>
+        </div>
+        <div id="jsonBox" class="field" style="margin-top:10px;"><label>JSON body</label><textarea id="jsonBody">{}</textarea></div>
+        <div id="formBox" style="display:none;margin-top:10px;">
+          <label>Form fields</label>
+          <table class="form-kv"><thead><tr><th>Key</th><th>Value</th></tr></thead><tbody id="formRows"></tbody></table>
+          <div class="row" style="margin-top:8px;">
+            <button type="button" class="btn btn-ghost" id="btnAddRow">+ Dòng</button>
+            <button type="button" class="btn btn-ghost" id="btnAddPriceTiers">+ PriceTiers mẫu</button>
+          </div>
+          <div class="field" style="margin-top:10px;"><label>File field</label><input id="fileFieldName" value="image" /><input id="fileInput" type="file" /></div>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <button type="button" class="btn btn-primary" id="btnSend">Gửi request</button>
+          <button type="button" class="btn btn-ghost" id="btnFormatJson">Format JSON</button>
+        </div>
+        <div class="statusline" id="apiStatus"></div>
+        <div class="meta" id="apiMeta"></div>
+        <div class="out" id="apiOut"></div>
+      </div>
+    </section>
+
+    <!-- Reference dropdowns -->
+    <section class="panel" id="panel-ref">
+      <div class="card">
+        <h2>Reference API — cache 24h</h2>
+        <p class="hint">Lần đầu focus vào dropdown sẽ gọi <span class="kbd">GET /api/reference/…</span> (cần JWT). Dữ liệu lưu <span class="kbd">bizflow_ref_cache_v1</span>. Nút “Xóa cache” để tải lại.</p>
+        <div class="row" style="margin-bottom:12px;">
+          <button type="button" class="btn btn-ghost" id="btnClearRefCache">Xóa cache reference</button>
+        </div>
+        <div class="grid g2">
+          <div class="field">
+            <label>Chọn nguồn enum</label>
+            <select id="enumSource">
+              <option value="import-types">import-types</option>
+              <option value="import-statuses">import-statuses</option>
+              <option value="order-statuses">order-statuses</option>
+              <option value="product-statuses">product-statuses</option>
+              <option value="money-channel-types">money-channel-types</option>
+              <option value="revenue-types">revenue-types</option>
+              <option value="payment-methods">payment-methods</option>
+              <option value="stock-movement-types">stock-movement-types</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Giá trị (preview)</label>
+            <select id="enumValueSelect"></select>
+          </div>
+        </div>
+        <div class="hint" id="enumCacheHint"></div>
+      </div>
+      <div class="card">
+        <h2>BusinessType — <span class="kbd">GET /api/business-types</span></h2>
+        <div class="field">
+          <label>BusinessTypeId (dùng cho tạo sản phẩm)</label>
+          <select id="businessTypeSelect"><option value="">— Mở dropdown để tải —</option></select>
+        </div>
+        <p class="hint" id="btCacheHint"></p>
+      </div>
+    </section>
+
+    <!-- Location + LOCATIONS -->
+    <section class="panel" id="panel-loc">
+      <div class="card">
+        <h2>Quota LOCATIONS (Firestore realtime)</h2>
+        <p class="hint">Kết nối tab <b>Firestore</b> (sign-in + listener) để cập nhật chip bên dưới. Backend vẫn chặn nếu vượt quota khi gọi <span class="kbd">POST /api/location/create</span>.</p>
+        <div class="row" style="margin-bottom:10px;">
+          <span class="pill wait" id="locQuotaPill">Chưa có dữ liệu Firestore</span>
+        </div>
+        <div class="grid g2">
+          <div class="field"><label>Tên cửa hàng</label><input id="locName" placeholder="Shop Q1" /></div>
+          <div class="field"><label>Điện thoại</label><input id="locPhone" placeholder="0901234567" /></div>
+          <div class="field" style="grid-column:1/-1;"><label>Địa chỉ</label><input id="locAddress" placeholder="123 Nguyễn Trãi" /></div>
+          <div class="field"><label>Quận</label><input id="locDistrict" placeholder="Quận 1" /></div>
+          <div class="field"><label>Thành phố</label><input id="locCity" placeholder="HCM" /></div>
+          <div class="field"><label>Mã số thuế</label><input id="locTax" placeholder="0123456789" /></div>
+        </div>
+        <div class="row" style="margin-top:14px;">
+          <button type="button" class="btn btn-ghost" id="btnCreateLocationDirect">Tạo cửa hàng (gọi thẳng API)</button>
+          <button type="button" class="btn btn-muted" id="btnCreateLocationGuarded" disabled>Tạo cửa hàng (check Firestore trước)</button>
+        </div>
+        <div class="hint" id="locBtnHint">Cần JWT. Nút thứ 2 chỉ bật khi Firestore báo còn quyền.</div>
+        <div class="hint" id="locEventHint"><span class="kbd">EVENT LOCATIONS</span>: Chưa kết nối Firestore listener.</div>
+        <div class="statusline" id="locStatus"></div>
+        <div class="out" id="locOut"></div>
+      </div>
+    </section>
+
+    <!-- Subscription -->
+    <section class="panel" id="panel-sub">
+      <div class="card">
+        <h2>Gói hiện tại của bạn</h2>
+        <p class="hint">Cần JWT. Sau khi thanh toán xong trên Stripe, quay lại đây và bấm <b>Làm mới trạng thái</b> để thấy gói mới (webhook BE đã kích hoạt subscription).</p>
+        <div id="subCurrentBanner" class="sub-banner">
+          <span class="pill wait">Chưa tải</span>
+          <div class="line">Bấm “Tải gói + trạng thái” hoặc “Làm mới trạng thái”.</div>
+        </div>
+        <div class="row">
+          <button type="button" class="btn btn-primary" id="btnSubLoadAll">Tải gói + trạng thái</button>
+          <button type="button" class="btn btn-ghost" id="btnCurrent">Làm mới trạng thái</button>
+          <button type="button" class="btn btn-ghost" id="btnLoadPlansOnly">Chỉ tải danh sách gói</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Gói có thể mua / nâng cấp</h2>
+        <p class="hint"><span class="kbd">GET /api/subscription-plans</span> — public. Gói giá 0 (miễn phí) không tạo checkout Stripe. Cùng gói + quantity &gt; 1: cộng dồn hạn và gia hạn. Đổi sang gói khác: credit + sàn 20% (theo cấu hình BE).</p>
+        <div class="plan-wrap">
+          <table class="plans">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Tên &amp; mô tả</th>
+                <th>Kỳ</th>
+                <th>Giá</th>
+                <th>Feature</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="plansTableBody">
+              <tr><td colspan="6" style="color:var(--muted);padding:20px;">Chưa có dữ liệu — bấm “Tải gói + trạng thái”.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Checkout Stripe</h2>
+        <div class="grid g3">
+          <div class="field"><label>SubscriptionPlanId</label><input id="planId" type="number" placeholder="Chọn từ bảng trên" /></div>
+          <div class="field"><label>Quantity</label><input id="quantity" type="number" min="1" value="1" /></div>
+          <div class="field"><label>Platform</label><select id="platform"><option value="web">web</option><option value="mobile">mobile</option></select></div>
+        </div>
+        <div id="checkoutQuote" class="quote-box" style="display:none;">
+          <div class="q-row"><span class="q-label">Giá catalog (gói × SL)</span><strong id="qqPlanPrice">—</strong></div>
+          <div class="q-row"><span class="q-label">Credit / proration</span><strong id="qqCredit">—</strong></div>
+          <div class="q-row"><span class="q-label">Số tiền thanh toán</span><strong id="qqFinal">—</strong></div>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <button type="button" class="btn btn-ok" id="btnCheckout">Tạo checkout</button>
+          <button type="button" class="btn btn-ghost" id="btnOpenCheckout" disabled>Mở URL Stripe</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Truy vấn thêm</h2>
+        <div class="row">
+          <button type="button" class="btn btn-ghost" id="btnTransactions">GET /api/subscriptions/transactions</button>
+        </div>
+        <div class="statusline" id="subStatus"></div>
+        <div class="meta" id="subMeta"></div>
+        <div class="out" id="subOut"></div>
+      </div>
+      <div class="card">
+        <h2>Hangfire</h2>
+        <button type="button" class="btn btn-ghost" id="btnHangfire">Mở /hangfire</button>
+      </div>
+    </section>
+
+    <!-- Firestore -->
+    <section class="panel" id="panel-fb">
+      <div class="card">
+        <h2>Firebase Web (client)</h2>
+        <div class="grid g2">
+          <div class="field"><label>apiKey</label><input id="fbApiKey" placeholder="AIza…" /></div>
+          <div class="field"><label>authDomain</label><input id="fbAuthDomain" placeholder="….firebaseapp.com" /></div>
+          <div class="field"><label>projectId</label><input id="fbProjectId" /></div>
+          <div class="field"><label>appId</label><input id="fbAppId" /></div>
+          <div class="field" style="grid-column:1/-1;"><label>Custom token (Mint hoặc dán)</label><input id="fbCustomToken" placeholder="eyJ…" /></div>
+          <div class="field" style="grid-column:1/-1;"><label>Owner Profile Id (GUID)</label><input id="ownerProfileId" placeholder="dùng cùng JWT / mint token" /></div>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <button type="button" class="btn btn-ghost" id="btnMintFirebase">Mint custom token (BE)</button>
+          <button type="button" class="btn btn-ghost" id="btnFbSignIn">Firebase signIn</button>
+          <button type="button" class="btn btn-primary" id="btnFbListen">Bật listener usage</button>
+          <button type="button" class="btn btn-ghost" id="btnFbStop">Tắt listener</button>
+        </div>
+        <div class="row" style="margin-top:10px;">
+          <button type="button" class="btn btn-ghost" id="btnFirestoreHealth">GET firestore/health</button>
+          <button type="button" class="btn btn-ghost" id="btnFirestoreUsage">GET firestore/usage (BE)</button>
+          <button type="button" class="btn btn-ghost" id="btnGateDebug">GET gate-debug</button>
+        </div>
+        <p class="hint">Sau khi listener chạy, chip LOCATIONS ở tab “Cửa hàng” sẽ cập nhật.</p>
+        <div class="statusline" id="fbStatus"></div>
+        <div class="out" id="fbOut"></div>
+      </div>
+    </section>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+    import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+    import { getAuth, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+
+    const CFG_KEY = "bizflow_console_cfg_v1";
+    const REF_CACHE_KEY = "bizflow_ref_cache_v1";
+    const BT_CACHE_KEY = "bizflow_business_types_v1";
+    const REF_TTL_MS = 24 * 60 * 60 * 1000;
+
+    const PRESETS = {
+      "loc-owned": { m: "GET", p: "/api/location/me/owned", mode: "none" },
+      "loc-work": { m: "GET", p: "/api/location/work-at-locations", mode: "none" },
+      "loc-create": { m: "POST", p: "/api/location/create", mode: "json", b: { name: "Shop Q1", address: "123 Nguyen Trai", district: "Quan 1", city: "HCM", phone: "0901234567", taxCode: "0123456789", employeeIds: [] } },
+      "prd-list": { m: "GET", p: "/api/my-business/products?businessLocationId={locationId}&pageNumber=1&pageSize=20", mode: "none" },
+      "prd-create": { m: "POST", p: "/api/my-business/product", mode: "form", f: { LocationId: "1", BusinessTypeId: "", ProductName: "Ca phe den", Sku: "CFD001", TrackInventory: "true", Unit: "Ly", SellingPrice: "25000", CostPrice: "12000", Stock: "100", Manufacturer: "BizFlow", PriceTiers: '[{"unit":"Ly","quantity":1,"price":25000}]' } },
+      "ord-list": { m: "GET", p: "/api/my-business/accounting/orders?businessLocationId={locationId}&pageNumber=1&pageSize=20", mode: "none" },
+      "ord-create": { m: "POST", p: "/api/my-business/accounting/orders", mode: "json", b: { businessLocationId: 1, customerName: "Khach le", customerPhone: "0900000000", debtorId: null, note: "Test", documentNumber: "ORD-001", documentDate: "2026-03-31", cashAmount: 50000, bankAmount: 0, debtAmount: 0, confirmLowStock: true, confirmCreditLimitExceeded: true, items: [{ saleItemId: 1, quantity: 2, discount: 0 }] } },
+      "imp-list": { m: "GET", p: "/api/my-business/accounting/imports?businessLocationId={locationId}&pageNumber=1&pageSize=20", mode: "none" },
+      "imp-create": { m: "POST", p: "/api/my-business/accounting/import", mode: "form", f: { ImportType: "INVOICE", BusinessLocationId: "1", Supplier: "NCC A", Note: "Test", ReceivedAt: "2026-03-31T10:00:00Z", DocumentNumber: "PN-001", DocumentDate: "2026-03-31", SaveAsDraft: "false", Items: '[{"productId":1,"quantity":10,"costPrice":10000}]' } },
+      "sub-current-self": { m: "GET", p: "/api/subscriptions/current", mode: "none" },
+      "sub-plans": { m: "GET", p: "/api/subscription-plans", mode: "none" }
+    };
+
+    const $ = (id) => document.getElementById(id);
+    let chkUrl = "";
+    let cachedPlans = [];
+    let currentSubscriptionPlanId = null;
+    let subTabPrimed = false;
+    let firebaseApp = null, firestoreDb = null, firebaseAuth = null, firestoreUnsub = null;
+    let lastLocFeature = null;
+    let locAccessState = "unknown"; // unknown | allowed | limit_reached | forbidden
+
+    function loadCfg() {
+      try {
+        const c = JSON.parse(localStorage.getItem(CFG_KEY) || "{}");
+        if (c.baseUrl) $("baseUrl").value = c.baseUrl;
+        if (c.token) $("token").value = c.token;
+        if (c.deviceInfo) $("deviceInfo").value = c.deviceInfo;
+        if (c.fbApiKey) $("fbApiKey").value = c.fbApiKey;
+        if (c.fbAuthDomain) $("fbAuthDomain").value = c.fbAuthDomain;
+        if (c.fbProjectId) $("fbProjectId").value = c.fbProjectId;
+        if (c.fbAppId) $("fbAppId").value = c.fbAppId;
+        if (c.fbCustomToken) $("fbCustomToken").value = c.fbCustomToken;
+        if (c.ownerProfileId) $("ownerProfileId").value = c.ownerProfileId;
+      } catch (_) {}
+    }
+    function saveCfg() {
+      localStorage.setItem(CFG_KEY, JSON.stringify({
+        baseUrl: $("baseUrl").value.trim(),
+        token: $("token").value.trim(),
+        deviceInfo: $("deviceInfo").value.trim(),
+        fbApiKey: $("fbApiKey").value.trim(),
+        fbAuthDomain: $("fbAuthDomain").value.trim(),
+        fbProjectId: $("fbProjectId").value.trim(),
+        fbAppId: $("fbAppId").value.trim(),
+        fbCustomToken: $("fbCustomToken").value.trim(),
+        ownerProfileId: $("ownerProfileId").value.trim()
+      }));
+    }
+
+    function base() { return $("baseUrl").value.trim().replace(/\/+$/, ""); }
+    function authHeaders(json = true) {
+      const h = {};
+      if (json) h["Content-Type"] = "application/json";
+      const t = $("token").value.trim();
+      if (t) h["Authorization"] = "Bearer " + t;
+      return h;
+    }
+
+    async function api(path, method = "GET", body = null, raw = null) {
+      const url = base() + path;
+      const opt = { method, headers: authHeaders(!raw) };
+      if (body && !raw) opt.body = JSON.stringify(body);
+      if (raw) { opt.body = raw; opt.headers = authHeaders(false); delete opt.headers["Content-Type"]; }
+      const res = await fetch(url, opt);
+      const text = await res.text();
+      let data = text;
+      try { data = JSON.parse(text); } catch (_) {}
+      return { ok: res.ok, status: res.status, data };
+    }
+
+    function dump(el, data, status, ok) {
+      el.textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+      return { status, ok };
+    }
+
+    function getRefCache() {
+      try { return JSON.parse(localStorage.getItem(REF_CACHE_KEY) || "{}"); } catch (_) { return {}; }
+    }
+    function setRefCache(path, payload) {
+      const o = getRefCache();
+      o[path] = { ts: Date.now(), data: payload };
+      localStorage.setItem(REF_CACHE_KEY, JSON.stringify(o));
+    }
+    function getRefCached(path) {
+      const o = getRefCache()[path];
+      if (!o || Date.now() - o.ts > REF_TTL_MS) return null;
+      return o.data;
+    }
+
+    async function fetchReference(path, force) {
+      const full = "/api/reference/" + path;
+      if (!force) {
+        const c = getRefCached(full);
+        if (c) return { ok: true, status: 200, data: c, fromCache: true };
+      }
+      const res = await api(full, "GET");
+      if (res.ok) setRefCache(full, res.data);
+      return { ...res, fromCache: false };
+    }
+
+    async function fetchBusinessTypes(force) {
+      const path = "/api/business-types";
+      if (!force) {
+        try {
+          const c = JSON.parse(localStorage.getItem(BT_CACHE_KEY) || "null");
+          if (c && Date.now() - c.ts < REF_TTL_MS) return { ok: true, status: 200, data: c.data, fromCache: true };
+        } catch (_) {}
+      }
+      const res = await api(path, "GET");
+      if (res.ok) localStorage.setItem(BT_CACHE_KEY, JSON.stringify({ ts: Date.now(), data: res.data }));
+      return { ...res, fromCache: false };
+    }
+
+    function normalizeEnumItems(payload) {
+      const raw = payload?.data ?? payload;
+      if (!Array.isArray(raw)) return [];
+      return raw.map((x) => {
+        if (typeof x === "string") return { value: x, label: x };
+        if (x && typeof x === "object") {
+          const value = x.code ?? x.value ?? x.status ?? x.name ?? JSON.stringify(x);
+          const label = x.name ?? x.label ?? x.code ?? x.value ?? x.status ?? String(value);
+          return { value: String(value), label: String(label) };
+        }
+        return { value: String(x), label: String(x) };
+      });
+    }
+
+    function normalizeBusinessTypes(payload) {
+      const raw = payload?.data ?? payload;
+      if (!Array.isArray(raw)) return [];
+      return raw.map((x) => {
+        if (!x || typeof x !== "object") return null;
+        const id = x.businessTypeId ?? x.id;
+        if (id == null) return null;
+        const name = x.name ?? x.code ?? String(id);
+        return { value: String(id), label: name + " (" + id + ")" };
+      }).filter(Boolean);
+    }
+
+    function setJsonField(field, value) {
+      let obj = {};
+      try { obj = JSON.parse($("jsonBody").value || "{}"); } catch (_) {}
+      obj[field] = value;
+      $("jsonBody").value = JSON.stringify(obj, null, 2);
+    }
+
+    function setFormField(field, value) {
+      const rows = Array.from($("formRows").querySelectorAll("tr"));
+      for (const row of rows) {
+        const inputs = row.querySelectorAll("input");
+        if (inputs[0].value.trim() === field) { inputs[1].value = value; return; }
+      }
+      const tr = document.createElement("tr");
+      tr.innerHTML = "<td><input></td><td><input></td>";
+      tr.querySelectorAll("input")[0].value = field;
+      tr.querySelectorAll("input")[1].value = value;
+      $("formRows").appendChild(tr);
+    }
+
+    function updateLocQuotaPill(feat) {
+      const pill = $("locQuotaPill");
+      const directBtn = $("btnCreateLocationDirect");
+      const guardedBtn = $("btnCreateLocationGuarded");
+      const hasJwt = !!$("token").value.trim();
+      directBtn.disabled = !hasJwt;
+
+      function paintGuarded(state, message, css) {
+        locAccessState = state;
+        guardedBtn.className = "btn " + css;
+        guardedBtn.disabled = !hasJwt || state !== "allowed";
+        $("locBtnHint").textContent = message;
+      }
+
+      if (!feat) {
+        pill.className = "pill wait";
+        pill.textContent = "Chưa có snapshot LOCATIONS (bật Firestore listener)";
+        $("locEventHint").innerHTML = "<span class='kbd'>EVENT LOCATIONS</span>: chưa có dữ liệu realtime.";
+        paintGuarded("unknown", "Chưa có dữ liệu Firestore realtime. Chỉ nên dùng nút gọi thẳng API để test.", "btn-muted");
+        return;
+      }
+
+      const used = Number(feat.used ?? 0);
+      const limit = Number(feat.limit ?? 0);
+      const can = limit < 0 || used < limit;
+      const forbidden = limit === 0;
+
+      if (forbidden) {
+        pill.className = "pill bad";
+        pill.textContent = "LOCATIONS: không có quyền trong gói hiện tại";
+        $("locEventHint").innerHTML = "<span class='kbd'>EVENT LOCATIONS</span>: <b style='color:var(--bad)'>KHÔNG CÓ QUYỀN</b>";
+        paintGuarded("forbidden", "Firestore báo gói hiện tại không có quyền LOCATIONS (limit=0).", "btn-bad");
+        return;
+      }
+
+      pill.className = "pill " + (can ? "ok" : "wait");
+      pill.textContent = "LOCATIONS: " + used + " / " + (limit < 0 ? "∞" : limit) + (can ? " — còn quyền" : " — đạt giới hạn");
+      if (can) {
+        $("locEventHint").innerHTML = "<span class='kbd'>EVENT LOCATIONS</span>: <b style='color:var(--ok)'>CÒN QUYỀN</b>";
+        paintGuarded("allowed", "Firestore realtime: còn quyền. Nút check Firestore được bật (xanh).", "btn-ok");
+      } else {
+        $("locEventHint").innerHTML = "<span class='kbd'>EVENT LOCATIONS</span>: <b style='color:var(--warn)'>ĐẠT LIMIT</b>";
+        paintGuarded("limit_reached", "Firestore realtime: đã đạt limit. Nút check Firestore bị khóa (xám).", "btn-muted");
+      }
+    }
+
+    function parseLocFromFirestoreData(data) {
+      if (!data || !data.features) return null;
+      const f = data.features;
+      return f.LOCATIONS || f.locations || null;
+    }
+
+    // --- Tabs ---
+    document.querySelectorAll("#mainTabs button").forEach((b) => {
+      b.addEventListener("click", () => {
+        document.querySelectorAll("#mainTabs button").forEach((x) => x.classList.remove("active"));
+        b.classList.add("active");
+        const id = b.dataset.tab;
+        document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
+        $("panel-" + id).classList.add("active");
+        if (id === "sub" && !subTabPrimed) {
+          subTabPrimed = true;
+          loadSubscriptionPlans();
+        }
+      });
+    });
+
+    // --- Presets ---
+    const presetSelect = $("presetSelect");
+    Object.entries(PRESETS).forEach(([k, v]) => {
+      const o = document.createElement("option");
+      o.value = k;
+      o.textContent = "[" + v.m + "] " + v.p;
+      presetSelect.appendChild(o);
+    });
+
+    function setMode(mode) {
+      $("bodyMode").value = mode;
+      $("jsonBox").style.display = mode === "json" ? "" : "none";
+      $("formBox").style.display = mode === "form" ? "" : "none";
+    }
+    function clearFormRows() { $("formRows").innerHTML = ""; }
+    function addFormRow(k = "", v = "") {
+      const tr = document.createElement("tr");
+      tr.innerHTML = "<td><input></td><td><input></td>";
+      tr.querySelectorAll("input")[0].value = k;
+      tr.querySelectorAll("input")[1].value = v;
+      $("formRows").appendChild(tr);
+    }
+    function getFormObject() {
+      const out = {};
+      $("formRows").querySelectorAll("tr").forEach((row) => {
+        const inputs = row.querySelectorAll("input");
+        const key = inputs[0].value.trim();
+        if (key) out[key] = inputs[1].value;
+      });
+      return out;
+    }
+
+    function applyPreset(key) {
+      const p = PRESETS[key];
+      if (!p) return;
+      $("method").value = p.m;
+      $("path").value = p.p;
+      setMode(p.mode);
+      $("jsonBody").value = p.b ? JSON.stringify(p.b, null, 2) : "{}";
+      clearFormRows();
+      if (p.f) Object.entries(p.f).forEach(([k, v]) => addFormRow(k, v));
+      else addFormRow("", "");
+    }
+
+    $("btnApplyPreset").addEventListener("click", () => applyPreset(presetSelect.value));
+    document.querySelectorAll(".quick").forEach((b) => b.addEventListener("click", () => applyPreset(b.dataset.key)));
+    $("bodyMode").addEventListener("change", (e) => setMode(e.target.value));
+    $("btnAddRow").addEventListener("click", () => addFormRow("", ""));
+    $("btnAddPriceTiers").addEventListener("click", () => addFormRow("PriceTiers", '[{"unit":"Ly","quantity":1,"price":25000}]'));
+    $("btnFormatJson").addEventListener("click", () => {
+      try { $("jsonBody").value = JSON.stringify(JSON.parse($("jsonBody").value), null, 2); } catch (_) { $("apiStatus").textContent = "JSON không hợp lệ"; }
+    });
+
+    $("btnSend").addEventListener("click", async () => {
+      const method = $("method").value;
+      const path = $("path").value.trim();
+      const mode = $("bodyMode").value;
+      $("apiStatus").textContent = "Đang gửi…";
+      try {
+        let body = null, raw = null;
+        if (mode === "json" && $("jsonBody").value.trim()) body = JSON.parse($("jsonBody").value);
+        if (mode === "form") {
+          const fd = new FormData();
+          Object.entries(getFormObject()).forEach(([k, v]) => fd.append(k, v));
+          const file = $("fileInput").files[0];
+          if (file) fd.append($("fileFieldName").value.trim() || "image", file);
+          raw = fd;
+        }
+        const res = await fetch(base() + path, {
+          method,
+          headers: authHeaders(!raw),
+          body: mode === "none" ? undefined : mode === "form" ? raw : JSON.stringify(body)
+        });
+        const text = await res.text();
+        let data = text;
+        try { data = JSON.parse(text); } catch (_) {}
+        $("apiMeta").innerHTML = "HTTP <b>" + res.status + "</b> — " + (res.ok ? "<span style='color:var(--ok)'>OK</span>" : "<span style='color:var(--bad)'>Lỗi</span>");
+        dump($("apiOut"), data);
+        $("apiStatus").textContent = res.ok ? "Xong." : "Thất bại.";
+      } catch (e) {
+        $("apiStatus").textContent = String(e.message || e);
+        dump($("apiOut"), { error: String(e) });
+      }
+    });
+
+    // --- Enum dropdown (lazy) ---
+    async function refreshEnumSelect(force) {
+      const seg = $("enumSource").value;
+      $("enumCacheHint").textContent = "Đang tải…";
+      const res = await fetchReference(seg, force);
+      const items = normalizeEnumItems(res.data);
+      const sel = $("enumValueSelect");
+      sel.innerHTML = "";
+      items.forEach((it) => {
+        const o = document.createElement("option");
+        o.value = it.value;
+        o.textContent = it.label + " (" + it.value + ")";
+        sel.appendChild(o);
+      });
+      $("enumCacheHint").textContent = (res.fromCache ? "Từ cache local. " : "Vừa gọi API. ") + items.length + " mục.";
+    }
+    $("enumSource").addEventListener("change", () => refreshEnumSelect(false));
+    $("enumValueSelect").addEventListener("focus", () => { if (!$("enumValueSelect").options.length) refreshEnumSelect(false); });
+
+    // --- Business types ---
+    async function refreshBusinessTypes(force) {
+      $("btCacheHint").textContent = "Đang tải BusinessType…";
+      const res = await fetchBusinessTypes(force);
+      const items = normalizeBusinessTypes(res.data);
+      const sel = $("businessTypeSelect");
+      sel.innerHTML = "<option value=''>— Chọn —</option>";
+      items.forEach((it) => {
+        const o = document.createElement("option");
+        o.value = it.value;
+        o.textContent = it.label;
+        sel.appendChild(o);
+      });
+      $("btCacheHint").textContent = (res.fromCache ? "Cache local. " : "API mới. ") + items.length + " loại hình.";
+    }
+    $("businessTypeSelect").addEventListener("focus", () => {
+      if ($("businessTypeSelect").options.length <= 1) refreshBusinessTypes(false);
+    });
+    $("businessTypeSelect").addEventListener("change", () => {
+      const v = $("businessTypeSelect").value;
+      if (v) { setFormField("BusinessTypeId", v); setJsonField("businessTypeId", v); }
+    });
+
+    $("btnClearRefCache").addEventListener("click", () => {
+      localStorage.removeItem(REF_CACHE_KEY);
+      localStorage.removeItem(BT_CACHE_KEY);
+      $("enumCacheHint").textContent = "Đã xóa cache.";
+      $("btCacheHint").textContent = "Mở lại dropdown để tải mới.";
+    });
+
+    // --- Auth ---
+    $("btnSaveCfg").addEventListener("click", () => { saveCfg(); $("apiStatus").textContent = "Đã lưu."; });
+    $("btnLoadCfg").addEventListener("click", () => { loadCfg(); $("apiStatus").textContent = "Đã nạp."; });
+
+    async function login(kind) {
+      const payload = kind === "email"
+        ? { email: $("loginEmail").value.trim(), password: $("loginPassword").value, deviceInfo: $("deviceInfo").value.trim() }
+        : { phone: $("loginPhone").value.trim(), password: $("loginPassword").value, deviceInfo: $("deviceInfo").value.trim() };
+      const path = kind === "email" ? "/api/auth/login/email" : "/api/auth/login/phone";
+      const res = await fetch(base() + path, { method: "POST", headers: authHeaders(), body: JSON.stringify(payload) });
+      const text = await res.text();
+      let data = text;
+      try { data = JSON.parse(text); } catch (_) {}
+      dump($("apiOut"), data);
+      if (res.ok && data?.data?.accessToken) {
+        $("token").value = data.data.accessToken;
+        saveCfg();
+        $("apiStatus").textContent = "Login OK, JWT đã lưu.";
+      } else $("apiStatus").textContent = "Login thất bại.";
+    }
+    $("btnLoginEmail").addEventListener("click", () => login("email"));
+    $("btnLoginPhone").addEventListener("click", () => login("phone"));
+
+    // --- Location create ---
+    async function submitCreateLocation(source) {
+      $("locStatus").textContent = "Đang tạo…";
+      const body = {
+        name: $("locName").value.trim(),
+        address: $("locAddress").value.trim(),
+        district: $("locDistrict").value.trim(),
+        city: $("locCity").value.trim(),
+        phone: $("locPhone").value.trim(),
+        taxCode: $("locTax").value.trim(),
+        employeeIds: []
+      };
+      const res = await api("/api/location/create", "POST", body);
+      dump($("locOut"), res.data, res.status, res.ok);
+      $("locStatus").textContent = res.ok
+        ? "Tạo thành công qua nút: " + source + "."
+        : "HTTP " + res.status + " — xem body (" + source + ").";
+    }
+
+    $("btnCreateLocationDirect").addEventListener("click", async () => {
+      await submitCreateLocation("gọi thẳng API");
+    });
+
+    $("btnCreateLocationGuarded").addEventListener("click", async () => {
+      if (locAccessState !== "allowed") {
+        $("locStatus").textContent = "Đã chặn ở UI: EVENT LOCATIONS chưa cho phép tạo.";
+        return;
+      }
+      await submitCreateLocation("check Firestore trước");
+    });
+
+    // --- Subscription ---
+    function unwrapApiData(body) {
+      if (body && typeof body === "object" && "data" in body && body.data !== undefined)
+        return body.data;
+      return body;
+    }
+
+    function fmtMoney(n, cur) {
+      if (n == null || Number.isNaN(Number(n))) return "—";
+      return Number(n).toLocaleString("vi-VN") + " " + (cur || "VND");
+    }
+
+    function fmtLimit(lim) {
+      if (lim == null) return "—";
+      if (Number(lim) < 0) return "∞";
+      return String(lim);
+    }
+
+    function fmtFeatures(features) {
+      if (!Array.isArray(features) || !features.length) return "—";
+      return features.map((f) => {
+        const code = f.featureCode ?? f.FeatureCode ?? "?";
+        const lim = fmtLimit(f.usageLimit ?? f.UsageLimit);
+        return code + ": " + lim;
+      }).join(" · ");
+    }
+
+    function escapeHtml(s) {
+      return String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function renderPlansTable(plans) {
+      const tb = $("plansTableBody");
+      tb.innerHTML = "";
+      if (!Array.isArray(plans) || !plans.length) {
+        tb.innerHTML = "<tr><td colspan='6' style='color:var(--muted);padding:20px;'>Không có gói active.</td></tr>";
+        return;
+      }
+      cachedPlans = plans;
+      plans.forEach((p) => {
+        const id = p.subscriptionPlanId ?? p.SubscriptionPlanId;
+        const name = p.name ?? p.Name ?? "";
+        const desc = p.description ?? p.Description ?? "";
+        const dur = p.durationDays ?? p.DurationDays ?? 0;
+        const priceObj = p.currentPrice ?? p.CurrentPrice;
+        const eff = Number(priceObj?.effectivePrice ?? priceObj?.EffectivePrice ?? 0);
+        const cur = priceObj?.currency ?? priceObj?.Currency ?? "VND";
+        const isFree = eff <= 0;
+        const feats = p.features ?? p.Features;
+        const isCurrent = currentSubscriptionPlanId != null && Number(id) === Number(currentSubscriptionPlanId);
+
+        const tr = document.createElement("tr");
+        tr.innerHTML =
+          "<td><span class='kbd'>" + id + "</span>" +
+          (isCurrent ? " <span class='pill ok' style='font-size:.65rem;padding:2px 8px'>Đang dùng</span>" : "") +
+          "</td>" +
+          "<td><strong>" + escapeHtml(name) + "</strong>" +
+          (desc ? "<div class='feat'>" + escapeHtml(desc) + "</div>" : "") +
+          "</td>" +
+          "<td>" + (dur ? dur + " ngày" : "—") + "</td>" +
+          "<td>" + (isFree ? "<span class='pill wait'>Miễn phí</span>" : escapeHtml(fmtMoney(eff, cur)) + " / kỳ") + "</td>" +
+          "<td class='feat'>" + escapeHtml(fmtFeatures(feats)) + "</td>" +
+          "<td><button type='button' class='btn btn-ghost plan-pick' data-id='" + id + "' data-free='" + isFree + "'>Chọn</button></td>";
+        tb.appendChild(tr);
+      });
+      tb.querySelectorAll(".plan-pick").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-id");
+          const free = btn.getAttribute("data-free") === "true";
+          $("planId").value = id;
+          if (free)
+            $("subStatus").textContent = "Gói miễn phí — không tạo checkout Stripe.";
+          else
+            $("subStatus").textContent = "Đã chọn planId=" + id + ". Đặt quantity và bấm Tạo checkout.";
+        });
+      });
+    }
+
+    function renderCurrentBanner(dto) {
+      const box = $("subCurrentBanner");
+      if (!dto || (typeof dto === "object" && !dto.status && !dto.Status)) {
+        box.innerHTML =
+          "<span class='pill wait'>Chưa có subscription active</span>" +
+          "<div class='line'>Trạng thái có thể là Inactive/Expired — xem JSON đầy đủ bên dưới.</div>";
+        currentSubscriptionPlanId = null;
+        if (cachedPlans.length) renderPlansTable(cachedPlans);
+        return;
+      }
+      const status = dto.status ?? dto.Status ?? "?";
+      const sid = dto.subscriptionId ?? dto.SubscriptionId;
+      const start = dto.startDate ?? dto.StartDate;
+      const end = dto.endDate ?? dto.EndDate;
+      const plan = dto.plan ?? dto.Plan;
+      const pid = plan?.subscriptionPlanId ?? plan?.SubscriptionPlanId;
+      currentSubscriptionPlanId = pid != null ? Number(pid) : null;
+
+      const stClass = String(status).toLowerCase() === "active" ? "ok" : "wait";
+      const planName = plan?.name ?? plan?.Name ?? "(không có plan)";
+      let html = "<div><strong>" + escapeHtml(planName) + "</strong> ";
+      html += "<span class='pill " + stClass + "'>" + escapeHtml(status) + "</span>";
+      if (sid) html += " <span class='kbd' title='" + String(sid) + "'>" + String(sid).slice(0, 8) + "…</span>";
+      html += "</div>";
+      html += "<div class='line'>";
+      if (start) html += "Bắt đầu: <strong>" + new Date(start).toLocaleString("vi-VN") + "</strong> · ";
+      if (end) html += "Kết thúc: <strong>" + new Date(end).toLocaleString("vi-VN") + "</strong>";
+      else html += "Kết thúc: <em>không trả về (gói theo lịch / không hiển thị)</em>";
+      html += "</div>";
+      const pFeats = plan?.features ?? plan?.Features;
+      if (pFeats && (Array.isArray(pFeats) ? pFeats.length : true))
+        html += "<div class='line'>Quota gói: " + escapeHtml(fmtFeatures(Array.isArray(pFeats) ? pFeats : [])) + "</div>";
+      box.innerHTML = html;
+      if (cachedPlans.length) renderPlansTable(cachedPlans);
+    }
+
+    async function loadSubscriptionPlans() {
+      const res = await api("/api/subscription-plans", "GET");
+      const plans = unwrapApiData(res.data);
+      $("subMeta").innerHTML = "GET /api/subscription-plans → HTTP " + res.status;
+      dump($("subOut"), res.data);
+      if (Array.isArray(plans)) renderPlansTable(plans);
+      else renderPlansTable([]);
+      $("subStatus").textContent = res.ok ? "Đã tải danh sách gói." : "Lỗi tải gói.";
+      return res.ok;
+    }
+
+    async function loadCurrentSubscription() {
+      const res = await api("/api/subscriptions/current");
+      const dto = unwrapApiData(res.data);
+      $("subMeta").innerHTML = "GET /api/subscriptions/current → HTTP " + res.status;
+      dump($("subOut"), res.data);
+      if (res.ok) renderCurrentBanner(dto);
+      else {
+        currentSubscriptionPlanId = null;
+        $("subCurrentBanner").innerHTML =
+          "<span class='pill bad'>HTTP " + res.status + "</span><div class='line'>Xem JSON bên dưới.</div>";
+        if (cachedPlans.length) renderPlansTable(cachedPlans);
+      }
+      $("subStatus").textContent = res.ok ? "Đã cập nhật trạng thái gói." : "Lỗi current.";
+      return res.ok;
+    }
+
+    $("btnSubLoadAll").addEventListener("click", async () => {
+      $("subStatus").textContent = "Đang tải…";
+      await loadSubscriptionPlans();
+      if ($("token").value.trim())
+        await loadCurrentSubscription();
+      else {
+        $("subStatus").textContent = "Đã tải gói (chưa có JWT — không gọi current).";
+        $("subCurrentBanner").innerHTML =
+          "<span class='pill wait'>Chưa đăng nhập</span>" +
+          "<div class='line'>Đăng nhập ở tab Kết nối rồi bấm “Làm mới trạng thái” hoặc “Tải gói + trạng thái”.</div>";
+      }
+    });
+    $("btnLoadPlansOnly").addEventListener("click", () => loadSubscriptionPlans());
+
+    $("btnCheckout").addEventListener("click", async () => {
+      const planId = Number($("planId").value);
+      if (!planId) {
+        $("subStatus").textContent = "Chọn planId từ bảng (nút Chọn).";
+        return;
+      }
+      const picked = cachedPlans.find((p) => Number(p.subscriptionPlanId ?? p.SubscriptionPlanId) === planId);
+      const eff = picked
+        ? Number((picked.currentPrice ?? picked.CurrentPrice)?.effectivePrice ??
+          (picked.currentPrice ?? picked.CurrentPrice)?.EffectivePrice ?? 0)
+        : null;
+      if (eff !== null && eff <= 0) {
+        $("subStatus").textContent = "Gói miễn phí — backend từ chối checkout Stripe.";
+        return;
+      }
+      const res = await api("/api/subscriptions/checkout", "POST", {
+        subscriptionPlanId: planId,
+        quantity: Number($("quantity").value),
+        platform: $("platform").value
+      });
+      dump($("subOut"), res.data, res.status, res.ok);
+      const inner = unwrapApiData(res.data);
+      chkUrl = inner?.sessionUrl || inner?.SessionUrl || "";
+      $("btnOpenCheckout").disabled = !chkUrl;
+      if (res.ok && inner) {
+        $("checkoutQuote").style.display = "";
+        const cur = inner.currency || inner.Currency || "VND";
+        $("qqPlanPrice").textContent = fmtMoney(inner.planPrice ?? inner.PlanPrice, cur);
+        $("qqCredit").textContent = fmtMoney(inner.prorationCredit ?? inner.ProrationCredit, cur);
+        $("qqFinal").textContent = fmtMoney(inner.finalAmount ?? inner.FinalAmount, cur);
+      } else {
+        $("checkoutQuote").style.display = "none";
+      }
+      $("subStatus").textContent = res.ok ? "OK — có thể mở Stripe." : "Lỗi checkout.";
+    });
+    $("btnOpenCheckout").addEventListener("click", () => { if (chkUrl) window.open(chkUrl, "_blank"); });
+    $("btnCurrent").addEventListener("click", () => loadCurrentSubscription());
+    $("btnTransactions").addEventListener("click", async () => {
+      const res = await api("/api/subscriptions/transactions?page=1&pageSize=20");
+      $("subMeta").innerHTML = "GET transactions → HTTP " + res.status;
+      dump($("subOut"), res.data);
+      $("subStatus").textContent = "transactions";
+    });
+    $("btnHangfire").addEventListener("click", () => window.open(base() + "/hangfire", "_blank"));
+
+    // --- Firestore module ---
+    $("btnFirestoreHealth").addEventListener("click", async () => {
+      const res = await api("/api/test/firebase/firestore/health");
+      dump($("fbOut"), res.data);
+      $("fbStatus").textContent = "health";
+    });
+    $("btnFirestoreUsage").addEventListener("click", async () => {
+      const res = await api("/api/test/firebase/firestore/usage");
+      dump($("fbOut"), res.data);
+    });
+    $("btnGateDebug").addEventListener("click", async () => {
+      const res = await api("/api/test/firebase/firestore/gate-debug");
+      dump($("fbOut"), res.data);
+    });
+
+    $("btnMintFirebase").addEventListener("click", async () => {
+      const res = await api("/api/auth/firebase/custom-token", "POST", null);
+      dump($("fbOut"), res.data);
+      const tok = res.data?.data?.customToken;
+      const pid = res.data?.data?.profileId;
+      if (tok) {
+        $("fbCustomToken").value = tok;
+        $("fbStatus").textContent = "Đã mint — dùng nút Sign-In";
+      }
+      if (pid && !$("ownerProfileId").value.trim()) $("ownerProfileId").value = String(pid);
+      saveCfg();
+    });
+
+    $("btnFbSignIn").addEventListener("click", async () => {
+      const cfg = {
+        apiKey: $("fbApiKey").value.trim(),
+        authDomain: $("fbAuthDomain").value.trim(),
+        projectId: $("fbProjectId").value.trim(),
+        appId: $("fbAppId").value.trim()
+      };
+      if (!cfg.apiKey || !cfg.projectId || !cfg.appId) { $("fbStatus").textContent = "Thiếu Firebase config"; return; }
+      if (!firebaseApp) {
+        firebaseApp = initializeApp(cfg, "bizflow-console");
+        firestoreDb = getFirestore(firebaseApp);
+        firebaseAuth = getAuth(firebaseApp);
+      }
+      const customToken = $("fbCustomToken").value.trim();
+      if (!customToken) { $("fbStatus").textContent = "Chưa có custom token — bấm Mint"; return; }
+      await signInWithCustomToken(firebaseAuth, customToken);
+      $("fbStatus").textContent = "Firebase đã sign-in.";
+    });
+
+    $("btnFbListen").addEventListener("click", async () => {
+      const ownerProfileId = $("ownerProfileId").value.trim();
+      if (!ownerProfileId) { $("fbStatus").textContent = "Thiếu Owner Profile Id"; return; }
+      if (!firestoreDb) { $("fbStatus").textContent = "Chưa init Firebase / sign-in"; return; }
+      if (firestoreUnsub) firestoreUnsub();
+      const docId = ownerProfileId + "_active";
+      const docRef = doc(firestoreDb, "usage_tracking", docId);
+      firestoreUnsub = onSnapshot(docRef, (snap) => {
+        const payload = { exists: snap.exists(), path: "usage_tracking/" + docId, data: snap.exists() ? snap.data() : null };
+        dump($("fbOut"), payload);
+        lastLocFeature = parseLocFromFirestoreData(payload.data);
+        updateLocQuotaPill(lastLocFeature);
+      }, (err) => {
+        dump($("fbOut"), { error: err.code, message: err.message });
+      });
+      $("fbStatus").textContent = "Listener usage_tracking/" + docId;
+    });
+
+    $("btnFbStop").addEventListener("click", () => {
+      if (firestoreUnsub) { firestoreUnsub(); firestoreUnsub = null; }
+      $("fbStatus").textContent = "Đã tắt listener.";
+    });
+
+    loadCfg();
+    applyPreset("loc-owned");
+    $("token").addEventListener("input", () => updateLocQuotaPill(lastLocFeature));
+    updateLocQuotaPill(null);
+  </script>
+</body>
+</html>

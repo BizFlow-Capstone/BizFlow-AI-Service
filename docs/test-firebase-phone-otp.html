@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BizFlow - Firebase Phone OTP Token Helper</title>
+  <style>
+    :root {
+      --bg: #f4f6fb;
+      --card: #ffffff;
+      --text: #1d2433;
+      --muted: #5a657a;
+      --border: #d8dfef;
+      --primary: #1f6feb;
+      --success: #1a7f37;
+      --danger: #b42318;
+      --mono-bg: #0f172a;
+      --mono-text: #d1fae5;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at 15% 10%, #e9f0ff 0%, var(--bg) 45%, #eef7ff 100%);
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 28px auto;
+      padding: 0 16px 24px;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: 28px;
+      letter-spacing: 0.2px;
+    }
+
+    p.lead {
+      margin: 0 0 22px;
+      color: var(--muted);
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 8px 28px rgba(20, 30, 55, 0.08);
+      margin-bottom: 14px;
+    }
+
+    .card h2 {
+      margin: 0 0 12px;
+      font-size: 18px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    @media (max-width: 760px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+
+    label {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    input {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 11px 12px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s ease;
+      width: 100%;
+    }
+
+    input:focus {
+      border-color: var(--primary);
+    }
+
+    .row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--primary);
+      color: white;
+    }
+
+    button.secondary {
+      background: #334155;
+    }
+
+    button.success {
+      background: var(--success);
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    #status {
+      margin-top: 8px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      white-space: pre-wrap;
+      font-size: 13px;
+    }
+
+    .danger {
+      color: var(--danger);
+    }
+
+    .mono {
+      margin-top: 8px;
+      background: var(--mono-bg);
+      color: var(--mono-text);
+      border-radius: 12px;
+      padding: 12px;
+      font-family: Consolas, "Cascadia Code", monospace;
+      font-size: 12px;
+      word-break: break-all;
+      max-height: 220px;
+      overflow: auto;
+      border: 1px solid #1e293b;
+    }
+
+    .hint {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+      line-height: 1.45;
+    }
+
+    code {
+      background: #eef2ff;
+      border-radius: 6px;
+      padding: 1px 6px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Firebase Phone OTP -> firebaseIdToken</h1>
+    <p class="lead">
+      Dung trang nay de lay <strong>firebaseIdToken</strong> sau khi xac thuc OTP, roi paste vao API
+      <code>/api/auth/register/phone</code> hoac <code>/api/auth/link/phone</code>.
+    </p>
+
+    <div class="card">
+      <h2>1) Firebase Web Config</h2>
+      <div class="grid">
+        <div class="field">
+          <label>apiKey</label>
+          <input id="apiKey" placeholder="AIza..." />
+        </div>
+        <div class="field">
+          <label>authDomain</label>
+          <input id="authDomain" placeholder="your-project.firebaseapp.com" />
+        </div>
+        <div class="field">
+          <label>projectId</label>
+          <input id="projectId" placeholder="your-project-id" />
+        </div>
+        <div class="field">
+          <label>appId</label>
+          <input id="appId" placeholder="1:123456789:web:abcdef..." />
+        </div>
+      </div>
+      <div class="hint">
+        Lay cac gia tri nay trong Firebase Console -> Project settings -> General -> Your apps (Web app).
+      </div>
+      <div class="row">
+        <button id="btnInit">Initialize Firebase</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>2) Send OTP</h2>
+      <div class="field">
+        <label>Phone number (E.164)</label>
+        <input id="phone" value="+84901234567" placeholder="+84xxxxxxxxx" />
+      </div>
+      <div id="recaptcha-container"></div>
+      <div class="hint">
+        Nho them domain vao Firebase Auth authorized domains (vd: <code>localhost</code>).
+      </div>
+      <div class="row">
+        <button id="btnSendOtp" disabled>Send OTP</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>3) Verify OTP va lay token</h2>
+      <div class="field">
+        <label>OTP code</label>
+        <input id="otpCode" placeholder="Nhap 6 so OTP" />
+      </div>
+      <div class="row">
+        <button id="btnVerifyOtp" class="success" disabled>Verify OTP + Get Token</button>
+        <button id="btnCopyToken" class="secondary" disabled>Copy firebaseIdToken</button>
+      </div>
+      <div id="status">Trang thai: Chua khoi tao.</div>
+      <div id="tokenBox" class="mono" style="display:none;"></div>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+  <script>
+    let confirmationResult = null;
+    let recaptchaVerifier = null;
+    let auth = null;
+    let firebaseIdToken = "";
+
+    const statusEl = document.getElementById("status");
+    const tokenBox = document.getElementById("tokenBox");
+    const btnInit = document.getElementById("btnInit");
+    const btnSendOtp = document.getElementById("btnSendOtp");
+    const btnVerifyOtp = document.getElementById("btnVerifyOtp");
+    const btnCopyToken = document.getElementById("btnCopyToken");
+
+    function setStatus(msg, isError) {
+      statusEl.textContent = "Trang thai: " + msg;
+      statusEl.className = isError ? "danger" : "";
+      if (!isError) {
+        statusEl.style.color = "#5a657a";
+      }
+    }
+
+    function readConfig() {
+      return {
+        apiKey: document.getElementById("apiKey").value.trim(),
+        authDomain: document.getElementById("authDomain").value.trim(),
+        projectId: document.getElementById("projectId").value.trim(),
+        appId: document.getElementById("appId").value.trim()
+      };
+    }
+
+    btnInit.addEventListener("click", () => {
+      try {
+        const cfg = readConfig();
+        if (!cfg.apiKey || !cfg.authDomain || !cfg.projectId || !cfg.appId) {
+          setStatus("Thieu Firebase config (apiKey, authDomain, projectId, appId)", true);
+          return;
+        }
+
+        if (!firebase.apps.length) {
+          firebase.initializeApp(cfg);
+        }
+
+        auth = firebase.auth();
+
+        if (recaptchaVerifier) {
+          try { recaptchaVerifier.clear(); } catch (_) {}
+        }
+
+        recaptchaVerifier = new firebase.auth.RecaptchaVerifier("recaptcha-container", {
+          size: "normal"
+        });
+
+        recaptchaVerifier.render();
+        btnSendOtp.disabled = false;
+        setStatus("Da khoi tao Firebase xong. Co the gui OTP.", false);
+      } catch (err) {
+        setStatus("Loi khoi tao Firebase: " + (err?.message || err), true);
+      }
+    });
+
+    btnSendOtp.addEventListener("click", async () => {
+      try {
+        if (!auth || !recaptchaVerifier) {
+          setStatus("Chua khoi tao Firebase", true);
+          return;
+        }
+
+        const phone = document.getElementById("phone").value.trim();
+        if (!phone.startsWith("+")) {
+          setStatus("Phone phai o dinh dang quoc te, vd +84901234567", true);
+          return;
+        }
+
+        setStatus("Dang gui OTP...", false);
+        confirmationResult = await auth.signInWithPhoneNumber(phone, recaptchaVerifier);
+        btnVerifyOtp.disabled = false;
+        setStatus("Da gui OTP. Vui long nhap ma va bam Verify.", false);
+      } catch (err) {
+        setStatus("Gui OTP that bai: " + (err?.message || err), true);
+      }
+    });
+
+    btnVerifyOtp.addEventListener("click", async () => {
+      try {
+        if (!confirmationResult) {
+          setStatus("Chua co confirmationResult. Gui OTP truoc.", true);
+          return;
+        }
+
+        const code = document.getElementById("otpCode").value.trim();
+        if (!code) {
+          setStatus("Vui long nhap OTP", true);
+          return;
+        }
+
+        setStatus("Dang verify OTP...", false);
+        const cred = await confirmationResult.confirm(code);
+        firebaseIdToken = await cred.user.getIdToken(true);
+
+        tokenBox.style.display = "block";
+        tokenBox.textContent = firebaseIdToken;
+        btnCopyToken.disabled = false;
+
+        setStatus("Verify thanh cong. Da lay duoc firebaseIdToken.", false);
+      } catch (err) {
+        setStatus("Verify OTP that bai: " + (err?.message || err), true);
+      }
+    });
+
+    btnCopyToken.addEventListener("click", async () => {
+      try {
+        if (!firebaseIdToken) {
+          setStatus("Chua co token de copy", true);
+          return;
+        }
+        await navigator.clipboard.writeText(firebaseIdToken);
+        setStatus("Da copy firebaseIdToken vao clipboard.", false);
+      } catch (err) {
+        setStatus("Copy that bai: " + (err?.message || err), true);
+      }
+    });
+  </script>
+</body>
+</html>
