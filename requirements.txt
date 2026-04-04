@@ -33,3 +33,6 @@ python-multipart==0.0.20
 
 # --- Async HTTP (internal health checks / optional) -------------------------
 httpx==0.28.1
+
+# --- Database migrations -----------------------------------------------------
+alembic==1.14.1
