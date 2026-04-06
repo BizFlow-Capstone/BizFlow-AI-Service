@@ -41,6 +41,7 @@ docker/
 .env.*
 uat.env
 *.local
+ai.env
 
 # ==========================================
 # Data, Logs & Backups

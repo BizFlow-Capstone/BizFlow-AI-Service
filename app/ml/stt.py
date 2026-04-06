@@ -1,13 +1,17 @@
 """
 ml/stt.py — Speech-to-Text wrapper
 
-Primary:  Google Cloud STT (vi-VN, Synchronous Recognition)
+Primary:  Google Cloud STT **v2** (vi-VN, Synchronous Recognition)
+           Uses AutoDetectDecodingConfig — supports all common audio formats
+           (webm, m4a, mp3, wav, ogg, flac, aac, ...) without manual encoding map.
            Free tier: 60 min/month. Dedicated Vietnamese acoustic model.
+           Requires: GOOGLE_APPLICATION_CREDENTIALS + GOOGLE_CLOUD_PROJECT in env.
 
 Fallback: OpenAI Whisper (whisper-1)
            Activated automatically if:
-             - GOOGLE_APPLICATION_CREDENTIALS is not set, OR
-             - Google STT raises a quota / service error.
+             - GOOGLE_APPLICATION_CREDENTIALS or GOOGLE_CLOUD_PROJECT is not set, OR
+             - Google STT raises a quota / service error, OR
+             - Google STT returns an empty transcript.
 
 Both providers accept a raw audio bytes payload and return a plain
 transcript string. All STT logic is isolated here so the draft_order
@@ -32,8 +36,8 @@ async def transcribe(audio_bytes: bytes, mime_type: str = "audio/webm") -> str:
     Transcribe Vietnamese speech audio to text.
 
     Args:
-        audio_bytes: Raw audio file content (webm, mp3, wav, m4a, ogg).
-        mime_type:   MIME type of the audio. Used by Google STT encoding detection.
+        audio_bytes: Raw audio file content (webm, m4a, mp3, wav, ogg, ...).
+        mime_type:   MIME type hint (codec params stripped automatically).
 
     Returns:
         Transcript string (may be empty if no speech detected).
@@ -41,56 +45,64 @@ async def transcribe(audio_bytes: bytes, mime_type: str = "audio/webm") -> str:
     Raises:
         STTError: when both providers fail.
     """
-    if settings.google_application_credentials:
+    # Strip codec params: "audio/webm; codecs=opus" → "audio/webm"
+    normalized_mime_type = _normalize_audio_mime_type(mime_type)
+    logger.info("STT request: mime=%s bytes=%d", normalized_mime_type, len(audio_bytes))
+
+    if settings.google_application_credentials and settings.google_cloud_project:
         try:
-            return await _transcribe_google(audio_bytes, mime_type)
+            transcript = await _transcribe_google_v2(audio_bytes)
+            if transcript.strip():
+                return transcript
+            # Google returned empty (no speech detected) — fall through to Whisper
+            logger.warning("Google STT v2 returned empty transcript — falling back to Whisper.")
         except Exception as exc:
             logger.warning(
-                "Google STT failed (%s). Falling back to Whisper.", exc, exc_info=True
+                "Google STT v2 failed (%s) — falling back to Whisper.", exc, exc_info=True
             )
 
-    return await _transcribe_whisper(audio_bytes, mime_type)
+    return await _transcribe_whisper(audio_bytes, normalized_mime_type)
 
 
 # ---------------------------------------------------------------------------
-# Google Cloud STT
+# Google Cloud STT v2
 # ---------------------------------------------------------------------------
 
-async def _transcribe_google(audio_bytes: bytes, mime_type: str) -> str:
+async def _transcribe_google_v2(audio_bytes: bytes) -> str:
     """
-    Call Google Cloud Speech-to-Text v1 Synchronous Recognition.
-    Uses the vi-VN locale and WEBM_OPUS encoding by default.
+    Call Google Cloud Speech-to-Text v2 Synchronous Recognition.
+
+    Key advantage over v1: AutoDetectDecodingConfig handles all audio formats
+    automatically — no manual encoding map needed. M4A, AAC, MP3, WebM, WAV,
+    OGG are all supported transparently.
     """
-    from google.cloud import speech  # imported lazily to avoid hard dep at startup
+    from google.cloud.speech_v2 import SpeechClient
+    from google.cloud.speech_v2.types import cloud_speech
 
     os.environ.setdefault("GOOGLE_APPLICATION_CREDENTIALS", settings.google_application_credentials)
 
-    client = speech.SpeechClient()
+    client = SpeechClient()
 
-    encoding_map = {
-        "audio/webm": speech.RecognitionConfig.AudioEncoding.WEBM_OPUS,
-        "audio/ogg":  speech.RecognitionConfig.AudioEncoding.OGG_OPUS,
-        "audio/mp3":  speech.RecognitionConfig.AudioEncoding.MP3,
-        "audio/wav":  speech.RecognitionConfig.AudioEncoding.LINEAR16,
-        "audio/m4a":  speech.RecognitionConfig.AudioEncoding.MP3,
-    }
-
-    audio = speech.RecognitionAudio(content=audio_bytes)
-    config = speech.RecognitionConfig(
-        encoding=encoding_map.get(mime_type, speech.RecognitionConfig.AudioEncoding.ENCODING_UNSPECIFIED),
-        language_code="vi-VN",
-        enable_automatic_punctuation=True,
-        model="latest_long",
+    config = cloud_speech.RecognitionConfig(
+        auto_decoding_config=cloud_speech.AutoDetectDecodingConfig(),
+        language_codes=["vi-VN"],
+        model=settings.google_stt_model,
     )
 
-    response = client.recognize(config=config, audio=audio)
+    request = cloud_speech.RecognizeRequest(
+        recognizer=f"projects/{settings.google_cloud_project}/locations/global/recognizers/_",
+        config=config,
+        content=audio_bytes,
+    )
+
+    response = client.recognize(request=request)
 
     transcript = " ".join(
         result.alternatives[0].transcript
         for result in response.results
         if result.alternatives
     )
-    logger.info("Google STT transcript: %s", transcript)
+    logger.info("Google STT v2 transcript: %s", transcript)
     return transcript
 
 
@@ -130,3 +142,11 @@ async def _transcribe_whisper(audio_bytes: bytes, mime_type: str) -> str:
     transcript = str(response).strip()
     logger.info("Whisper STT transcript: %s", transcript)
     return transcript
+
+
+def _normalize_audio_mime_type(mime_type: str) -> str:
+    # Strip codec parameters: "audio/webm; codecs=opus" → "audio/webm"
+    base = (mime_type or "").split(";")[0].strip().lower()
+    if base in {"audio/x-m4a", "audio/mp4", "audio/aac"}:
+        return "audio/m4a"
+    return base or "audio/webm"

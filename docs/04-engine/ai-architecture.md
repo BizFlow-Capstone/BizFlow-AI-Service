@@ -22,7 +22,7 @@ The BizFlow AI Service is an independent Python microservice deployed alongside 
 | API Framework | **FastAPI** (Python) | Async, fast, auto-generates OpenAPI docs |
 | Speech-to-Text | **Google Cloud STT** (`vi-VN`, Synchronous Recognition) — primary; **Whisper** (`whisper-1`) — fallback | Google STT: free tier 60 min/month, dedicated Vietnamese model; Whisper: reliable fallback if quota exceeded |
 | LLM | **OpenAI GPT-4o-mini** (extraction / explanation) + **GPT-4o Vision** (OCR) | gpt-4o-mini is 15× cheaper than gpt-4o and sufficient for structured JSON extraction; Vision API handles document OCR with Vietnamese text |
-| Vector Store | **ChromaDB** + **multilingual-e5-large** | In-process vector DB, no separate service needed; stores product catalog embeddings for RAG |
+| Vector Store | **ChromaDB** + **multilingual-e5-small** | In-process vector DB, no separate service needed; stores product catalog embeddings for RAG |
 | Revenue Forecasting | **Pandas** (EMA/SMA computation) + **GPT-4o-mini** (Vietnamese explanation) | No Prophet dependency (~200 MB); works with as little as 14 days of data; LLM explains trends naturally in Vietnamese |
 | Anomaly Detection | **Rule-based checks** (realtime) + **GPT-4o-mini** (nightly pattern summary) | Rule-based catches 80 % of data-entry errors instantly with zero cold-start; LLM provides natural Vietnamese explanation for subtler patterns |
 | Reorder Suggestions | **Pandas** + statistical reorder-point formula | Sales velocity + safety stock model; explainable and verifiable by non-technical users |

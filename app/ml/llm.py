@@ -60,7 +60,7 @@ async def chat(
     client = _get_client()
 
     kwargs: dict[str, Any] = {
-        "model": "gpt-4o-mini",
+        "model": settings.llm_chat_model,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user",   "content": user_prompt},
@@ -110,7 +110,7 @@ async def vision(
     data_url = f"data:{image_mime};base64,{b64_image}"
 
     response = await client.chat.completions.create(
-        model="gpt-4o",
+        model=settings.llm_vision_model,
         messages=[
             {"role": "system", "content": system_prompt},
             {

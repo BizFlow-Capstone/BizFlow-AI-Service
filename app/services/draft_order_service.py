@@ -6,8 +6,9 @@ Orchestrates: STT → RAG product matching → LLM extraction → DraftOrderResu
 Flow:
   1. audio_bytes → ml.stt.transcribe() → transcript (vi-VN text)
   2. transcript → ml.vector_store.query_products() → top-3 matching products from catalog
-  3. (transcript + product context) → ml.llm.chat() → structured JSON order
-  4. Parse JSON → DraftOrderResult
+  3. DB enrich: fetch SaleItems + active default prices for each matched product
+  4. (transcript + enriched catalog) → ml.llm.chat() → structured JSON order with sale_item_id
+  5. Parse JSON → resolve unit_price from DB → compute line_total → DraftOrderResult
 """
 
 import json
@@ -17,6 +18,8 @@ from typing import Any
 from pydantic import BaseModel
 
 from app.core.exceptions import LLMError, STTError
+from app.core.config import settings
+from app.db.mysql_client import fetch_all
 from app.ml import llm, stt, vector_store
 
 logger = logging.getLogger(__name__)
@@ -28,9 +31,13 @@ logger = logging.getLogger(__name__)
 
 class DraftOrderItem(BaseModel):
     product_id: str | None = None
+    sale_item_id: str | None = None
     product_name: str
+    matched: bool = False
     quantity: float
     unit: str
+    unit_price: float | None = None
+    line_total: float | None = None
     customer_name: str | None = None
     is_debt: bool = False
 
@@ -39,6 +46,7 @@ class DraftOrderResult(BaseModel):
     items: list[DraftOrderItem]
     raw_transcript: str
     confidence: str  # "high" | "medium" | "low"
+    total_amount: float | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -52,13 +60,15 @@ Quy tắc:
 - Chỉ trả về JSON hợp lệ, không giải thích thêm.
 - Nếu không xác định được thông tin, để null.
 - "is_debt" là true nếu có từ "nợ", "ghi sổ", "chịu", "thiếu tiền".
-- "product_id" chỉ điền nếu tìm được sản phẩm khớp trong danh sách catalog.
+- "product_id" và "sale_item_id" chỉ điền nếu tìm được sản phẩm + đơn vị bán khớp trong danh sách catalog.
+- Chọn "sale_item_id" dựa trên đơn vị tính ("unit") mà chủ shop nói.
 
 Output format:
 {
   "items": [
     {
       "product_id": "<id hoặc null>",
+      "sale_item_id": "<sale_item_id khớp đơn vị hoặc null>",
       "product_name": "<tên sản phẩm>",
       "quantity": <số lượng>,
       "unit": "<đơn vị>",
@@ -80,15 +90,18 @@ async def process_draft_order(
         return DraftOrderResult(items=[], raw_transcript="", confidence="low")
 
     # Step 2: RAG — find matching products in catalog
-    # Search for all noun phrases in transcript; query once with full transcript
     matched_products = await vector_store.query_products(
         location_id=location_id,
         query_text=transcript,
         top_k=5,
     )
 
-    # Step 3: LLM extraction
-    catalog_context = _format_catalog(matched_products)
+    # Step 3: DB enrich — fetch SaleItems + active prices for each matched product
+    product_ids = [p["product_id"] for p in matched_products if p.get("product_id")]
+    sale_items_map = _fetch_sale_items_with_price(product_ids)
+
+    # Step 4: LLM extraction with enriched catalog
+    catalog_context = _format_catalog(matched_products, sale_items_map)
     user_prompt = (
         f"Danh sách sản phẩm trong kho:\n{catalog_context}\n\n"
         f"Câu đặt hàng: \"{transcript}\"\n\n"
@@ -98,45 +111,135 @@ async def process_draft_order(
     raw_json = await llm.chat(
         system_prompt=_SYSTEM_PROMPT,
         user_prompt=user_prompt,
-        temperature=0.1,
+        temperature=settings.llm_draft_order_temperature,
+        max_tokens=settings.llm_draft_order_max_tokens,
         response_format={"type": "json_object"},
     )
 
-    # Step 4: Parse result
-    items, confidence = _parse_llm_response(raw_json, matched_products)
+    # Step 5: Parse result, resolve price, compute totals
+    items, confidence = _parse_llm_response(raw_json, matched_products, sale_items_map)
+    total_amount = sum(i.line_total for i in items if i.line_total is not None) or None
 
     return DraftOrderResult(
         items=items,
         raw_transcript=transcript,
         confidence=confidence,
+        total_amount=total_amount,
     )
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# DB helpers
 # ---------------------------------------------------------------------------
 
-def _format_catalog(products: list[dict[str, Any]]) -> str:
+def _fetch_sale_items_with_price(product_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+    """
+    For each product_id, return its SaleItems with the active default price.
+    Returns: {product_id: [{"sale_item_id": str, "unit": str, "price": float|None}, ...]}
+    """
+    if not product_ids:
+        return {}
+
+    placeholders = ", ".join(f":pid{i}" for i in range(len(product_ids)))
+    params: dict[str, Any] = {f"pid{i}": pid for i, pid in enumerate(product_ids)}
+
+    rows = fetch_all(
+        f"""
+        SELECT
+            si.SaleItemId,
+            si.ProductId,
+            si.Unit,
+            pp.Price
+        FROM SaleItems si
+        LEFT JOIN ProductPricePolicies pp
+               ON pp.SaleItemId = si.SaleItemId
+              AND pp.IsDefault = 1
+              AND (pp.EndAt IS NULL OR pp.EndAt > CURDATE())
+        WHERE si.ProductId IN ({placeholders})
+          AND si.DeletedAt IS NULL
+        ORDER BY si.ProductId, si.SaleItemId
+        """,
+        params,
+    )
+
+    result: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        pid = str(row["ProductId"])
+        result.setdefault(pid, []).append({
+            "sale_item_id": str(row["SaleItemId"]),
+            "unit":         row["Unit"] or "",
+            "price":        float(row["Price"]) if row["Price"] is not None else None,
+        })
+    return result
+
+
+def _get_price_by_sale_item_id(
+    sale_item_id: str,
+    sale_items_map: dict[str, list[dict[str, Any]]],
+) -> float | None:
+    """Look up price for a given sale_item_id from the already-fetched map."""
+    for items in sale_items_map.values():
+        for si in items:
+            if si["sale_item_id"] == sale_item_id:
+                return si["price"]
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Formatting / parsing helpers
+# ---------------------------------------------------------------------------
+
+def _format_catalog(
+    products: list[dict[str, Any]],
+    sale_items_map: dict[str, list[dict[str, Any]]],
+) -> str:
     if not products:
         return "(Không tìm thấy sản phẩm nào phù hợp trong kho)"
-    lines = [
-        f"- ID: {p['product_id']}, Tên: {p['name']}, Đơn vị: {p.get('unit', '')}"
-        for p in products
-    ]
+
+    lines: list[str] = []
+    for p in products:
+        pid = p["product_id"]
+        sale_items = sale_items_map.get(pid, [])
+        if sale_items:
+            units_str = ", ".join(
+                f"[sale_item_id={si['sale_item_id']}, unit={si['unit']}"
+                + (f", price={si['price']:,.0f}đ" if si["price"] is not None else "")
+                + "]"
+                for si in sale_items
+            )
+            lines.append(f"- product_id={pid}, Tên: {p['name']}, Đơn vị bán: {units_str}")
+        else:
+            lines.append(
+                f"- product_id={pid}, Tên: {p['name']}, Đơn vị: {p.get('unit', '')}"
+            )
     return "\n".join(lines)
 
 
 def _parse_llm_response(
     raw_json: str,
     matched_products: list[dict[str, Any]],
+    sale_items_map: dict[str, list[dict[str, Any]]],
 ) -> tuple[list[DraftOrderItem], str]:
     try:
         data = json.loads(raw_json)
         items: list[DraftOrderItem] = []
         for item_data in data.get("items", []):
-            items.append(DraftOrderItem(**item_data))
+            # LLM may return numeric IDs — Pydantic v2 requires str, coerce explicitly
+            for key in ("product_id", "sale_item_id"):
+                if item_data.get(key) is not None:
+                    item_data[key] = str(item_data[key])
+            item = DraftOrderItem(**item_data)
+            item.matched = item.product_id is not None
 
-        # Confidence heuristic: all items have a matched product_id → high
+            # Resolve unit_price from the already-fetched map (no extra DB round-trip)
+            if item.sale_item_id:
+                item.unit_price = _get_price_by_sale_item_id(item.sale_item_id, sale_items_map)
+
+            if item.unit_price is not None:
+                item.line_total = round(item.quantity * item.unit_price, 2)
+
+            items.append(item)
+
         has_all_ids = all(item.product_id for item in items) and len(items) > 0
         confidence = "high" if (has_all_ids and matched_products) else ("medium" if items else "low")
         return items, confidence

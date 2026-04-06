@@ -19,9 +19,11 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel
 
+from app.core.constants import OrderStatus
 from app.core.exceptions import InsufficientDataError
 from app.db.mysql_client import fetch_all, execute_write
 from app.ml import llm
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -54,12 +56,12 @@ async def run_forecast(location_id: str) -> ForecastSummary | None:
         SELECT DATE(created_at) AS ds, SUM(total_amount) AS y
         FROM orders
         WHERE location_id = :location_id
-          AND status = 'CONFIRMED'
+          AND status = :order_status
           AND created_at >= DATE_SUB(NOW(), INTERVAL 3 MONTH)
         GROUP BY DATE(created_at)
         ORDER BY ds
         """,
-        {"location_id": location_id},
+        {"location_id": location_id, "order_status": OrderStatus.COMPLETED},
     )
 
     if len(rows) < MINIMUM_DAYS:
@@ -125,7 +127,7 @@ async def _generate_trend_note(df_30: pd.DataFrame) -> str:
         "về xu hướng doanh thu của họ. Đề cập đến ngày nổi bật nếu có."
     )
     user = f"Dữ liệu doanh thu 30 ngày qua:\n{csv_preview}\n\nHãy nhận xét xu hướng."
-    return await llm.chat(system_prompt=system, user_prompt=user, temperature=0.7, max_tokens=256)
+    return await llm.chat(system_prompt=system, user_prompt=user, temperature=settings.llm_forecast_temperature, max_tokens=settings.llm_forecast_max_tokens)
 
 
 def _upsert_forecasts(rows: list[dict], trend_note: str) -> None:

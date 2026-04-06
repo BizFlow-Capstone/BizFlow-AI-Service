@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=".env.dev",
+        env_file=".ai.env.dev",
         env_file_encoding="utf-8",
         extra="ignore",          # ignore .NET-specific vars in the shared .env files
     )
@@ -26,23 +26,55 @@ class Settings(BaseSettings):
     openai_api_key: str
 
     # -------------------------------------------------------------------------
-    # Google Cloud STT (primary Speech-to-Text provider)
-    # Path to the Google service-account JSON key file.
-    # Set GOOGLE_APPLICATION_CREDENTIALS in the environment or .env file.
+    # Google Cloud STT v2 (primary Speech-to-Text provider)
+    # GOOGLE_APPLICATION_CREDENTIALS: path to service-account JSON key file.
+    # GOOGLE_CLOUD_PROJECT: GCP project ID (required for v2 recognizer path).
     # -------------------------------------------------------------------------
     google_application_credentials: str = ""
+    google_cloud_project: str = ""
+    google_stt_model: str = "long"  # "long" | "chirp_2" | "latest_long"
 
     # -------------------------------------------------------------------------
     # ChromaDB (in-process vector store for RAG)
     # -------------------------------------------------------------------------
     chroma_persist_dir: str = "./chroma_data"
+    embedding_model_name: str = "intfloat/multilingual-e5-small"
+
+    # -------------------------------------------------------------------------
+    # Vector search quality controls
+    # -------------------------------------------------------------------------
+    vector_fuzzy_threshold: float = 0.35
+    vector_fuzzy_score_cutoff: int = 60
 
     # -------------------------------------------------------------------------
     # Internal security
     # The BizFlow .NET API must pass this secret in the X-Internal-Secret header
     # for every request to the AI Service (container-to-container only).
     # -------------------------------------------------------------------------
-    internal_api_secret: str = "change_me_in_production"
+    internal_api_secret: str = "supersecretkey"
+
+    # -------------------------------------------------------------------------
+    # LLM — models
+    # Override via env to switch model tier without touching code.
+    # -------------------------------------------------------------------------
+    llm_chat_model:   str = "gpt-4o-mini"   # used by chat()
+    llm_vision_model: str = "gpt-4o"        # used by vision()
+
+    # -------------------------------------------------------------------------
+    # LLM — feature-specific temperatures
+    # Each feature can be tuned independently via .env without a code deploy.
+    #   extraction tasks (structured JSON)  → 0.0–0.2
+    #   analytical text generation          → 0.2–0.4
+    #   creative / open-ended explanation   → 0.4–0.7
+    # -------------------------------------------------------------------------
+    llm_draft_order_temperature: float = 0.1
+    llm_draft_order_max_tokens:  int   = 1024
+
+    llm_forecast_temperature: float = 0.2
+    llm_forecast_max_tokens:  int   = 256
+
+    llm_anomaly_temperature: float = 0.4
+    llm_anomaly_max_tokens:  int   = 300
 
     # -------------------------------------------------------------------------
     # Service

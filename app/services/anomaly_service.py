@@ -22,6 +22,8 @@ from pydantic import BaseModel
 
 from app.db.mysql_client import execute_write, fetch_all
 from app.ml import llm
+from app.core.config import settings
+from app.core.constants import OrderStatus
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +74,7 @@ async def _check_order(location_id: str, order_id: str) -> CheckRecordResult:
                 JOIN orders o2 ON si2.order_id = o2.id
                 WHERE si2.product_id = si.product_id
                   AND o2.location_id = :location_id
-                  AND o2.status = 'CONFIRMED'
+                  AND o2.status = :order_status
                   AND o2.created_at >= DATE_SUB(NOW(), INTERVAL 90 DAY)
                ) AS avg_price,
                o.is_debt, o.customer_id
@@ -80,7 +82,7 @@ async def _check_order(location_id: str, order_id: str) -> CheckRecordResult:
         JOIN orders o ON si.order_id = o.id
         WHERE o.id = :order_id
         """,
-        {"order_id": order_id, "location_id": location_id},
+        {"order_id": order_id, "location_id": location_id, "order_status": OrderStatus.COMPLETED},
     )
 
     alerts: list[AlertDetail] = []
@@ -117,12 +119,6 @@ async def _check_order(location_id: str, order_id: str) -> CheckRecordResult:
                     ),
                 ))
 
-        if is_debt and not customer_id:
-            alerts.append(AlertDetail(
-                alert_type="DATA_QUALITY",
-                severity="WARNING",
-                description="Đơn hàng ghi nợ nhưng chưa chọn khách hàng.",
-            ))
 
     _write_alerts(location_id, order_id, alerts, tier="RULE_BASED")
     has_critical = any(a.severity == "CRITICAL" for a in alerts)
@@ -176,12 +172,12 @@ async def run_pattern_check(location_id: str) -> PatternCheckSummary | None:
                AVG(total_amount)       AS avg_order_value
         FROM orders
         WHERE location_id = :location_id
-          AND status = 'CONFIRMED'
+          AND status = :order_status
           AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
         GROUP BY DATE(created_at)
         ORDER BY day
         """,
-        {"location_id": location_id},
+        {"location_id": location_id, "order_status": OrderStatus.COMPLETED},
     )
 
     if len(rows) < MINIMUM_DAYS_TIER2:
@@ -200,7 +196,7 @@ async def run_pattern_check(location_id: str) -> PatternCheckSummary | None:
     )
     user = f"Dữ liệu kinh doanh 7 ngày:\n{csv_data}\n\nCó điểm gì bất thường không?"
 
-    description = await llm.chat(system_prompt=system, user_prompt=user, temperature=0.4, max_tokens=300)
+    description = await llm.chat(system_prompt=system, user_prompt=user, temperature=settings.llm_anomaly_temperature, max_tokens=settings.llm_anomaly_max_tokens)
 
     # Only persist if the LLM found something noteworthy
     if "bình thường" not in description.lower():

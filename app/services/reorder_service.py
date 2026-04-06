@@ -27,6 +27,7 @@ import pandas as pd
 from pydantic import BaseModel
 
 from app.db.mysql_client import execute_write, fetch_all
+from app.core.constants import OrderStatus
 
 logger = logging.getLogger(__name__)
 
@@ -60,11 +61,11 @@ async def run_reorder(location_id: str) -> ReorderSummary | None:
         FROM sale_items si
         JOIN orders o ON si.order_id = o.id
         WHERE o.location_id = :location_id
-          AND o.status = 'CONFIRMED'
+          AND o.status = :order_status
           AND o.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
         GROUP BY DATE(o.created_at), si.product_id
         """,
-        {"location_id": location_id},
+        {"location_id": location_id, "order_status": OrderStatus.COMPLETED},
     )
 
     if not sales_rows:

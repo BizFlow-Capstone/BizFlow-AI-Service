@@ -2,7 +2,7 @@
 
 > **Tác giả:** BA & Solution Architecture Review  
 > **Ngày:** 2026-04-04  
-> **Trạng thái:** Draft — chờ review và approve trước khi làm
+> **Trạng thái:** Sprint 1 ✅ Done — Sprint 2 ✅ Done — Sprint 3 🔄 In Progress
 
 ---
 
@@ -152,12 +152,14 @@ answer = await llm.chat(system=..., user=csv_data, temperature=0.2)
 
 ### Checklist Sprint 1
 
-- [ ] Task 1.1 — Sửa `status='CONFIRMED'` (4 files)
-- [ ] Task 1.2 — Viết lại migration (backup DB trước)
-- [ ] Task 1.3 — Verify UNIQUE constraints tồn tại
-- [ ] Task 1.4 — Giảm temperature forecast
+- [x] Task 1.1 — Sửa `status='CONFIRMED'` (4 files) — dùng `OrderStatus` constants + parameterized SQL
+- [x] Task 1.2 — Viết lại migration (backup DB trước)
+- [x] Task 1.3 — Verify UNIQUE constraints tồn tại
+- [x] Task 1.4 — Giảm temperature forecast — chuyển sang env-configurable settings
+- [x] Bonus: Loại bỏ hardcode — tạo `constants.py`, mở rộng `config.py` với LLM settings
 - [ ] Test thủ công: gọi `POST /forecast`, `POST /reorder`, `POST /product-insights` với data thực
 - [ ] Verify rows được INSERT đúng vào DB
+- [ ] Chạy migration: `alembic downgrade base` → `alembic upgrade head`
 
 ---
 
@@ -288,10 +290,11 @@ _ = _aiServiceClient.TriggerVectorStoreDeleteAsync(locationId, product.ProductId
 
 ### Checklist Sprint 2
 
-- [ ] Task 2.1 — `IAiServiceClient` + implementation
-- [ ] Task 2.2 — `AiController` proxy endpoints (Draft Order + OCR)
-- [ ] Task 2.3 — Hook Anomaly Tier 1 vào CompleteAsync + ConfirmImportAsync
-- [ ] Task 2.4 — Vector store sync trong ProductService
+- [x] Task 2.1 — `IAiServiceClient` + `AiServiceHttpClient` + DI registration + `AiServiceSettings`
+- [x] Task 2.2 — `AiController` proxy endpoints (Draft Order + OCR Invoice + OCR Delivery Note)
+- [x] Task 2.3 — Hook Anomaly Tier 1 vào OrderService.CompleteAsync via Hangfire fire-and-forget
+- [x] Task 2.4 — Vector store sync trong ProductService (Create/Update/Delete)
+- [ ] Task 2.3b — Hook Anomaly vào ImportService.ConfirmImportAsync (tương tự OrderService)
 - [ ] Test: tạo product → query `/draft-order` xem có tìm thấy product không
 - [ ] Test: complete order → verify anomaly alert được tạo trong DB
 
@@ -379,7 +382,7 @@ Hiện tại `IFirebaseNotificationService` đã tồn tại trong BE (`Firebase
 - [ ] Task 3.1 — 4 Hangfire nightly jobs
 - [ ] Task 3.2 — Dashboard read endpoints
 - [ ] Task 3.3 — FCM push cho CRITICAL + HIGH urgency
-- [ ] Task 3.4 — Minor AI Service fixes
+- [x] Task 3.4 — Minor AI Service fixes (`matched` field + remove anomaly rule #4)
 - [ ] End-to-end test: chạy nightly jobs thủ công, verify data trong DB, verify FE có thể đọc
 
 ---
