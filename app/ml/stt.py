@@ -21,8 +21,11 @@ service never needs to know which engine was used.
 import io
 import logging
 import os
+import subprocess
+import tempfile
 
 from app.core.config import settings
+from app.core.exceptions import STTError
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +48,16 @@ async def transcribe(audio_bytes: bytes, mime_type: str = "audio/webm") -> str:
     Raises:
         STTError: when both providers fail.
     """
-    # Strip codec params: "audio/webm; codecs=opus" → "audio/webm"
     normalized_mime_type = _normalize_audio_mime_type(mime_type)
-    logger.info("STT request: mime=%s bytes=%d", normalized_mime_type, len(audio_bytes))
+    logger.info("STT request: original_mime=%s bytes=%d", normalized_mime_type, len(audio_bytes))
+
+    if not audio_bytes:
+        raise STTError("Audio rỗng, không thể xử lý nhận dạng giọng nói.")
+
+    # Convert all formats (AMR/Android, AAC/iPhone, 3GPP, WebM, ...) to
+    # 16 kHz mono WAV so both Google STT v2 and Whisper receive a format
+    # they universally support — no more per-format codec mapping needed.
+    audio_bytes = _convert_audio_to_wav(audio_bytes, normalized_mime_type)
 
     if settings.google_application_credentials and settings.google_cloud_project:
         try:
@@ -61,7 +71,151 @@ async def transcribe(audio_bytes: bytes, mime_type: str = "audio/webm") -> str:
                 "Google STT v2 failed (%s) — falling back to Whisper.", exc, exc_info=True
             )
 
-    return await _transcribe_whisper(audio_bytes, normalized_mime_type)
+    return await _transcribe_whisper(
+        audio_bytes,
+        "audio/wav",
+        source_mime_type=normalized_mime_type,
+    )
+
+
+# ---------------------------------------------------------------------------
+# FFmpeg audio normalizer
+# ---------------------------------------------------------------------------
+
+def _convert_audio_to_wav(audio_bytes: bytes, source_mime_type: str) -> bytes:
+    """
+    Convert any audio format to 16 kHz mono WAV using ffmpeg.
+
+    Uses temp files instead of stdin pipe because container formats
+    (3GP, MP4, M4A) may have the moov atom at the end of the file —
+    ffmpeg needs to seek backward to read it, which pipes don't support.
+    """
+    input_format = _resolve_ffmpeg_input_format(source_mime_type, audio_bytes)
+    logger.info(
+        "ffmpeg input: source_mime=%s, detected_format=%s, bytes=%d",
+        source_mime_type, input_format or "auto", len(audio_bytes),
+    )
+
+    # Determine proper file extension so ffmpeg can also use it as a hint
+    ext_map = {
+        "3gp": ".3gp", "mp4": ".mp4", "webm": ".webm", "ogg": ".ogg",
+        "wav": ".wav", "mp3": ".mp3", "flac": ".flac", "amr": ".amr",
+        "matroska": ".mkv",
+    }
+    in_ext = ext_map.get(input_format or "", ".bin")
+
+    try:
+        # Write input to a temp file (ffmpeg can seek on it)
+        with tempfile.NamedTemporaryFile(suffix=in_ext, delete=False) as tmp_in:
+            tmp_in.write(audio_bytes)
+            tmp_in_path = tmp_in.name
+
+        tmp_out_path = tmp_in_path + ".wav"
+
+        ffmpeg_cmd = ["ffmpeg", "-y"]
+        if input_format:
+            ffmpeg_cmd.extend(["-f", input_format])
+        ffmpeg_cmd.extend([
+            "-i", tmp_in_path,
+            "-vn",                   # ignore video stream if present
+            "-ar", "16000",          # 16 kHz — optimal for speech recognition
+            "-ac", "1",              # mono
+            "-acodec", "pcm_s16le",  # stable WAV codec
+            "-f", "wav",
+            tmp_out_path,
+        ])
+
+        result = subprocess.run(
+            ffmpeg_cmd,
+            capture_output=True,
+            timeout=30,
+        )
+
+        if result.returncode != 0:
+            logger.error("ffmpeg conversion failed: %s", result.stderr.decode(errors="replace"))
+            raise STTError(
+                "Không thể đọc file audio. "
+                "Vui lòng dùng định dạng webm, mp4, m4a, mp3, wav hoặc ogg."
+            )
+
+        wav_bytes = open(tmp_out_path, "rb").read()
+
+    except FileNotFoundError:
+        raise STTError("ffmpeg chưa được cài đặt trên server.")
+    except subprocess.TimeoutExpired:
+        raise STTError("Chuyển đổi audio mất quá nhiều thời gian, vui lòng thử lại với file nhỏ hơn.")
+    except STTError:
+        raise
+    finally:
+        # Clean up temp files
+        for p in (tmp_in_path, tmp_out_path):
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
+
+    # WAV must start with RIFF header and contain more than a bare header.
+    if len(wav_bytes) <= 64 or not wav_bytes.startswith(b"RIFF"):
+        raise STTError(
+            "File audio không hợp lệ sau khi chuyển đổi. "
+            "Nếu ghi âm từ Android, vui lòng chọn định dạng AAC/M4A thay vì AMR."
+        )
+
+    logger.debug("ffmpeg conversion: %d → %d bytes (16kHz mono WAV)", len(audio_bytes), len(wav_bytes))
+    return wav_bytes
+
+
+def _resolve_ffmpeg_input_format(source_mime_type: str, audio_bytes: bytes) -> str | None:
+    """
+    Best-effort format hint for ffmpeg when input comes from stdin.
+
+    IMPORTANT: header sniffing runs FIRST because MIME types from clients
+    are often wrong — e.g. Android voice recorders produce 3GP/AMR files
+    but the client may report audio/x-m4a or audio/m4a.
+    """
+    # ── 1. Header sniff (bytes never lie) ─────────────────────────
+    if len(audio_bytes) >= 12 and audio_bytes[4:8] == b"ftyp":
+        brand = audio_bytes[8:12]
+        if brand.startswith(b"3gp"):
+            return "3gp"
+        # isom, M4A, mp41, mp42 etc. — all ISO base media → mp4 demuxer
+        return "mp4"
+    if len(audio_bytes) >= 4:
+        head4 = audio_bytes[:4]
+        if head4 == b"RIFF":
+            return "wav"
+        if head4 == b"OggS":
+            return "ogg"
+        if head4 == b"fLaC":
+            return "flac"
+        if head4 == b"\x1aE\xdf\xa3":  # EBML header → WebM / Matroska
+            return "matroska"
+        # MP3: ID3 tag or MPEG sync word
+        if head4[:3] == b"ID3" or head4[:2] in {b"\xff\xfb", b"\xff\xf3", b"\xff\xf2"}:
+            return "mp3"
+        # AMR bare stream (no container)
+        if audio_bytes[:6] == b"#!AMR\n" or audio_bytes[:9] == b"#!AMR-WB\n":
+            return "amr"
+
+    # ── 2. MIME fallback (only when header is inconclusive) ───────
+    mime = (source_mime_type or "").lower()
+    if mime in {"audio/3gpp", "audio/3gpp2", "video/3gpp", "video/3gpp2"}:
+        return "3gp"
+    if mime in {"audio/mp4", "audio/m4a", "audio/x-m4a"}:
+        return "mp4"
+    if mime in {"audio/webm"}:
+        return "webm"
+    if mime in {"audio/ogg", "audio/oga"}:
+        return "ogg"
+    if mime in {"audio/wav", "audio/x-wav"}:
+        return "wav"
+    if mime in {"audio/mpeg", "audio/mp3"}:
+        return "mp3"
+    if mime in {"audio/amr"}:
+        return "amr"
+
+    # ── 3. No hint — let ffmpeg auto-detect ───────────────────────
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -110,34 +264,50 @@ async def _transcribe_google_v2(audio_bytes: bytes) -> str:
 # OpenAI Whisper fallback
 # ---------------------------------------------------------------------------
 
-async def _transcribe_whisper(audio_bytes: bytes, mime_type: str) -> str:
+async def _transcribe_whisper(
+    audio_bytes: bytes,
+    mime_type: str,
+    source_mime_type: str | None = None,
+) -> str:
     """
     Call OpenAI Whisper (whisper-1) for Speech-to-Text.
     Whisper auto-detects Vietnamese — no locale needs to be specified.
     """
-    from openai import AsyncOpenAI
+    from openai import AsyncOpenAI, APIError, BadRequestError
 
     client = AsyncOpenAI(api_key=settings.openai_api_key)
 
-    # Whisper requires a file-like object with a .name attribute
+    # Whisper requires a file-like object with a .name attribute.
+    # Use mp4 as fallback (better than webm for phone recordings).
     ext_map = {
         "audio/webm": "audio.webm",
         "audio/ogg":  "audio.ogg",
         "audio/mp3":  "audio.mp3",
+        "audio/mpeg": "audio.mp3",
         "audio/wav":  "audio.wav",
         "audio/m4a":  "audio.m4a",
+        "audio/mp4":  "audio.mp4",
     }
-    filename = ext_map.get(mime_type, "audio.webm")
+    filename = ext_map.get(mime_type, "audio.mp4")
 
     audio_file = io.BytesIO(audio_bytes)
     audio_file.name = filename  # type: ignore[attr-defined]
 
-    response = await client.audio.transcriptions.create(
-        model="whisper-1",
-        file=audio_file,
-        language="vi",
-        response_format="text",
-    )
+    try:
+        response = await client.audio.transcriptions.create(
+            model="whisper-1",
+            file=audio_file,
+            language="vi",
+            response_format="text",
+        )
+    except BadRequestError as exc:
+        original_mime = source_mime_type or mime_type
+        raise STTError(
+            f"Định dạng audio không được hỗ trợ (mime_goc={original_mime}). "
+            "Vui lòng dùng định dạng webm, mp4, m4a, mp3, wav hoặc ogg."
+        ) from exc
+    except APIError as exc:
+        raise STTError(f"Whisper API lỗi: {exc}") from exc
 
     transcript = str(response).strip()
     logger.info("Whisper STT transcript: %s", transcript)
@@ -145,8 +315,6 @@ async def _transcribe_whisper(audio_bytes: bytes, mime_type: str) -> str:
 
 
 def _normalize_audio_mime_type(mime_type: str) -> str:
-    # Strip codec parameters: "audio/webm; codecs=opus" → "audio/webm"
+    # Used only for logging the original client-reported MIME type.
     base = (mime_type or "").split(";")[0].strip().lower()
-    if base in {"audio/x-m4a", "audio/mp4", "audio/aac"}:
-        return "audio/m4a"
     return base or "audio/webm"

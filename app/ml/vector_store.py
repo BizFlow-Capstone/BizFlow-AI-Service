@@ -135,6 +135,98 @@ async def delete_product(location_id: str, product_id: str) -> None:
     logger.info("Deleted product %s from location %s collection.", product_id, location_id)
 
 
+def list_products(location_id: str, limit: int = 200) -> dict[str, Any]:
+    """
+    Return all products stored in a location's ChromaDB collection.
+
+    Args:
+        location_id: The business location id.
+        limit:       Max number of documents to return (default 200).
+
+    Returns:
+        dict with keys: location_id, total (int), items (list of metadata dicts).
+    """
+    collection = _get_collection(location_id)
+    total = collection.count()
+    if total == 0:
+        return {"location_id": location_id, "total": 0, "items": []}
+
+    result = collection.get(
+        limit=limit,
+        include=["metadatas", "documents"],
+    )
+    items = [
+        {
+            "product_id": meta.get("product_id", ids),
+            "name":       meta.get("name", ""),
+            "unit":       meta.get("unit", ""),
+            "category":   meta.get("category", ""),
+            "document":   doc,
+        }
+        for meta, doc, ids in zip(
+            result["metadatas"] or [],
+            result["documents"] or [],
+            result["ids"] or [],
+        )
+    ]
+    return {"location_id": location_id, "total": total, "items": items}
+
+
+async def backfill_location(location_id: str) -> dict[str, Any]:
+    """
+    Bulk-sync all active, non-deleted products of a location from MySQL into ChromaDB.
+
+    Queries the Products table joined with BusinessTypes to get the category name,
+    then upserts every product via sync_product(). Safe to re-run — ChromaDB's
+    upsert is idempotent so already-synced products just get refreshed.
+
+    Args:
+        location_id: The business location id (integer stored as string).
+
+    Returns:
+        dict with keys: location_id, synced (count), skipped (error count).
+    """
+    _SQL = """
+        SELECT
+            p.ProductId  AS product_id,
+            p.ProductName AS name,
+            p.Unit        AS unit,
+            bt.Name       AS category
+        FROM Products p
+        JOIN BusinessTypes bt ON p.BusinessTypeId = bt.BusinessTypeId
+        WHERE p.BusinessLocationId = :loc_id
+          AND p.DeletedAt IS NULL
+          AND p.Status   = 'Active'
+    """
+    rows = fetch_all(_SQL, {"loc_id": int(location_id)})
+    synced = 0
+    skipped = 0
+    for row in rows:
+        try:
+            await sync_product(
+                location_id=location_id,
+                product={
+                    "product_id": str(row["product_id"]),
+                    "name":       row["name"],
+                    "unit":       row["unit"] or "",
+                    "category":   row["category"] or "",
+                },
+            )
+            synced += 1
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "Backfill skipped product %s for location %s: %s",
+                row["product_id"], location_id, exc,
+            )
+            skipped += 1
+
+    logger.info(
+        "Backfill complete for location %s: synced=%d, skipped=%d.",
+        location_id, synced, skipped,
+    )
+    return {"location_id": location_id, "synced": synced, "skipped": skipped}
+
+
 async def query_products(
     location_id: str,
     query_text: str,

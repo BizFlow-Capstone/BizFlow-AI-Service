@@ -90,6 +90,7 @@ Output format:
 }
 
 Quy tắc:
+- Số tiền trên hóa đơn Việt Nam dùng dấu chấm (.) là phân cách hàng nghìn, KHÔNG phải dấu thập phân. Ví dụ: "5.144.940" = 5144940, "76.258.490" = 76258490. Trả về giá trị nguyên (integer), KHÔNG có phần thập phân.
 - confidence = "high"   nếu đọc rõ ràng, tổng tiền khớp với items.
 - confidence = "medium" nếu thiếu một số trường nhưng vẫn đọc được items.
 - confidence = "low"    nếu ảnh quá mờ hoặc không phải hóa đơn/phiếu mua hàng.
@@ -117,6 +118,7 @@ Output format:
 }
 
 Quy tắc:
+- Số tiền trên hóa đơn Việt Nam dùng dấu chấm (.) là phân cách hàng nghìn, KHÔNG phải dấu thập phân. Ví dụ: "5.144.940" = 5144940, "76.258.490" = 76258490. Trả về giá trị nguyên (integer), KHÔNG có phần thập phân.
 - confidence = "high"   nếu đọc rõ ràng, tổng tiền khớp với items.
 - confidence = "medium" nếu thiếu một số trường nhưng vẫn đọc được items.
 - confidence = "low"    nếu ảnh quá mờ hoặc không phải hóa đơn bán hàng.
