@@ -54,7 +54,7 @@ Quy tắc quan trọng về items:
 - "money_channel": "cash" nếu có từ "tiền mặt", "tiền tươi"; "bank" nếu có từ "chuyển khoản", "thẻ", "ví", "bank"; null nếu không rõ.
 - "revenue_date": YYYY-MM-DD nếu nói ngày cụ thể; null nếu không nói (ngầm là hôm nay).
 - "amount": số tiền (đơn vị đồng). "triệu" = 1.000.000, "nghìn"/"ngàn" = 1.000, "trăm" = 100.
-- "description": mô tả chung cho tất cả items (lấy từ tên hàng/dịch vụ được nhắc đến).
+- "description": mô tả ngắn gọn nội dung khoản doanh thu, tối đa 100 ký tự (ví dụ: "Bán áo thun", "Dịch vụ cắt tóc", "Thu tiền hàng ngày"). Nếu không rõ để null.
 - "confidence": "high" nếu trích xuất rõ amount + description; "medium" nếu thiếu một; "low" nếu quá mơ hồ.
 
 Output format:

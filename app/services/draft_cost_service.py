@@ -53,6 +53,7 @@ Quy tắc:
 - "payment_method": "cash" nếu có từ "tiền mặt", "tiền tươi"; "bank" nếu có từ "chuyển khoản", "thẻ", "ví"; null nếu không rõ.
 - "cost_date": định dạng YYYY-MM-DD nếu người dùng nói ngày cụ thể; null nếu không nói (ngầm hiểu là hôm nay).
 - "amount": số tiền (đơn vị đồng). Hiểu "triệu" = 1.000.000, "nghìn" / "ngàn" = 1.000, "trăm" = 100.
+- "description": mô tả ngắn gọn nội dung khoản chi, tối đa 100 ký tự (ví dụ: "Tiền điện tháng 4", "Nhập mì tôm", "Trả lương nhân viên"). Nếu không rõ để null.
 - "cost_type": phân loại chi phí dựa trên nội dung, chỉ dùng đúng các giá trị sau:
     "utilities"   → điện, nước, internet, điện thoại
     "salary"      → lương, thưởng, công thợ, nhân công
