@@ -19,7 +19,6 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel
 
-from app.core.constants import OrderStatus
 from app.core.exceptions import InsufficientDataError
 from app.db.mysql_client import fetch_all, execute_write
 from app.ml import llm
@@ -50,18 +49,19 @@ async def run_forecast(location_id: str) -> ForecastSummary | None:
     Run the full forecasting pipeline for one location.
     Returns None if there is insufficient data (skipped gracefully).
     """
-    # 1. Load data
+    # 1. Load data — đọc từ Revenues (gộp cả sale + manual, tránh double-count với Orders)
+    # Revenues.BusinessLocationId trực tiếp, không cần join phức tạp
     rows = fetch_all(
         """
-        SELECT DATE(created_at) AS ds, SUM(total_amount) AS y
-        FROM orders
-        WHERE location_id = :location_id
-          AND status = :order_status
-          AND created_at >= DATE_SUB(NOW(), INTERVAL 3 MONTH)
-        GROUP BY DATE(created_at)
+        SELECT RevenueDate AS ds, SUM(Amount) AS y
+        FROM Revenues
+        WHERE BusinessLocationId = :location_id
+          AND DeletedAt IS NULL
+          AND RevenueDate >= DATE_SUB(CURDATE(), INTERVAL 3 MONTH)
+        GROUP BY RevenueDate
         ORDER BY ds
         """,
-        {"location_id": location_id, "order_status": OrderStatus.COMPLETED},
+        {"location_id": int(location_id)},
     )
 
     if len(rows) < MINIMUM_DAYS:
@@ -156,7 +156,7 @@ def _write_insufficient_flag(location_id: str) -> None:
         INSERT INTO ai_revenue_forecasts
             (id, location_id, forecast_date, predicted_revenue, lower_bound, upper_bound, trend_note, generated_at)
         VALUES
-            (:id, :location_id, CURDATE(), NULL, NULL, NULL, 'not_enough_data', NOW())
+            (:id, :location_id, CURDATE(), 0, 0, 0, 'not_enough_data', NOW())
         ON DUPLICATE KEY UPDATE
             trend_note   = 'not_enough_data',
             generated_at = NOW()

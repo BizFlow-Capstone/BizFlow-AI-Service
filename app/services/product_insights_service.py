@@ -43,20 +43,23 @@ class InsightsSummary(BaseModel):
 
 async def run_product_insights(location_id: str) -> InsightsSummary | None:
     # 1. Load last 30 days of order line items
+    # filter by location via OrderDetails → SaleItems → Products.BusinessLocationId
     sales_rows = fetch_all(
         """
-        SELECT DATE(o.created_at)    AS sale_date,
-               si.product_id,
-               SUM(si.quantity)      AS qty_sold,
-               SUM(si.quantity * si.unit_price) AS revenue
-        FROM sale_items si
-        JOIN orders o ON si.order_id = o.id
-        WHERE o.location_id = :location_id
-          AND o.status = :order_status
-          AND o.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-        GROUP BY DATE(o.created_at), si.product_id
+        SELECT DATE(o.CreatedAt)         AS sale_date,
+               si.ProductId             AS product_id,
+               SUM(od.Quantity)         AS qty_sold,
+               SUM(od.Amount)           AS revenue
+        FROM OrderDetails od
+        JOIN Orders    o  ON od.OrderId   = o.OrderId
+        JOIN SaleItems si ON od.SaleItemId = si.SaleItemId
+        JOIN Products  p  ON si.ProductId  = p.ProductId
+        WHERE p.BusinessLocationId = :location_id
+          AND o.Status   = :order_status
+          AND o.CreatedAt >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+        GROUP BY DATE(o.CreatedAt), si.ProductId
         """,
-        {"location_id": location_id, "order_status": OrderStatus.COMPLETED},
+        {"location_id": int(location_id), "order_status": OrderStatus.COMPLETED},
     )
 
     if not sales_rows:
@@ -64,6 +67,7 @@ async def run_product_insights(location_id: str) -> InsightsSummary | None:
         return None
 
     df = pd.DataFrame(sales_rows)
+    df["product_id"] = df["product_id"].astype(str)   # normalise BIGINT → str
     df["qty_sold"]  = pd.to_numeric(df["qty_sold"],  downcast="float")
     df["revenue"]   = pd.to_numeric(df["revenue"],   downcast="float")
     df["sale_date"] = pd.to_datetime(df["sale_date"])
@@ -83,15 +87,16 @@ async def run_product_insights(location_id: str) -> InsightsSummary | None:
     # 4. Promote candidates
     product_rows = fetch_all(
         """
-        SELECT id AS product_id,
-               stock_quantity,
-               (selling_price - cost_price) / NULLIF(selling_price, 0) AS margin_ratio
-        FROM products
-        WHERE location_id = :location_id
-          AND status = 'ACTIVE'
-          AND selling_price > 0
+        SELECT ProductId AS product_id,
+               Stock AS stock_quantity,
+               (SellingPrice - CostPrice) / NULLIF(SellingPrice, 0) AS margin_ratio
+        FROM Products
+        WHERE BusinessLocationId = :location_id
+          AND Status    = 'Active'
+          AND SellingPrice > 0
+          AND DeletedAt IS NULL
         """,
-        {"location_id": location_id},
+        {"location_id": int(location_id)},
     )
     promote = _promote_candidates(product_rows)
 
@@ -160,6 +165,7 @@ def _promote_candidates(product_rows: list[dict]) -> list[dict]:
         return []
 
     df = pd.DataFrame(product_rows)
+    df["product_id"]    = df["product_id"].astype(str)
     df["stock_quantity"] = pd.to_numeric(df["stock_quantity"], downcast="float")
     df["margin_ratio"]   = pd.to_numeric(df["margin_ratio"],   downcast="float")
     df = df.dropna(subset=["margin_ratio"])
@@ -195,7 +201,7 @@ def _upsert_insights(location_id: str, rows: list[dict]) -> None:
         execute_write(
             """
             INSERT INTO ai_product_insights
-                (id, location_id, product_id, insight_type, rank, metric_value, period_days, generated_at)
+                (id, location_id, product_id, insight_type, `rank`, metric_value, period_days, generated_at)
             VALUES
                 (:id, :location_id, :product_id, :insight_type, :rank, :metric_value, :period_days, NOW())
             """,

@@ -68,21 +68,25 @@ async def check_record_rules(
 async def _check_order(location_id: str, order_id: str) -> CheckRecordResult:
     rows = fetch_all(
         """
-        SELECT si.unit_price, si.quantity, si.product_id,
-               (SELECT AVG(si2.unit_price)
-                FROM sale_items si2
-                JOIN orders o2 ON si2.order_id = o2.id
-                WHERE si2.product_id = si.product_id
-                  AND o2.location_id = :location_id
-                  AND o2.status = :order_status
-                  AND o2.created_at >= DATE_SUB(NOW(), INTERVAL 90 DAY)
-               ) AS avg_price,
-               o.is_debt, o.customer_id
-        FROM sale_items si
-        JOIN orders o ON si.order_id = o.id
-        WHERE o.id = :order_id
+        SELECT od.UnitPrice AS unit_price,
+               od.Quantity  AS quantity,
+               si.ProductId AS product_id,
+               (SELECT AVG(od2.UnitPrice)
+                FROM OrderDetails od2
+                JOIN Orders    o2  ON od2.OrderId   = o2.OrderId
+                JOIN SaleItems si2 ON od2.SaleItemId = si2.SaleItemId
+                JOIN Products  p2  ON si2.ProductId  = p2.ProductId
+                WHERE si2.ProductId = si.ProductId
+                  AND p2.BusinessLocationId = :location_id
+                  AND o2.Status  = :order_status
+                  AND o2.CreatedAt >= DATE_SUB(NOW(), INTERVAL 90 DAY)
+               ) AS avg_price
+        FROM OrderDetails od
+        JOIN Orders    o  ON od.OrderId   = o.OrderId
+        JOIN SaleItems si ON od.SaleItemId = si.SaleItemId
+        WHERE o.OrderId = :order_id
         """,
-        {"order_id": order_id, "location_id": location_id, "order_status": OrderStatus.COMPLETED},
+        {"order_id": int(order_id), "location_id": int(location_id), "order_status": OrderStatus.COMPLETED},
     )
 
     alerts: list[AlertDetail] = []
@@ -90,8 +94,6 @@ async def _check_order(location_id: str, order_id: str) -> CheckRecordResult:
         unit_price = float(row["unit_price"] or 0)
         quantity   = float(row["quantity"] or 0)
         avg_price  = float(row["avg_price"] or 0) if row["avg_price"] else None
-        is_debt    = bool(row["is_debt"])
-        customer_id = row["customer_id"]
 
         if unit_price == 0:
             alerts.append(AlertDetail(
@@ -128,11 +130,12 @@ async def _check_order(location_id: str, order_id: str) -> CheckRecordResult:
 async def _check_import(location_id: str, import_id: str) -> CheckRecordResult:
     rows = fetch_all(
         """
-        SELECT pi.quantity, pi.unit_price AS cost_per_unit
-        FROM product_imports pi
-        WHERE pi.import_id = :import_id
+        SELECT pi.Quantity  AS quantity,
+               pi.CostPrice AS cost_per_unit
+        FROM ProductImports pi
+        WHERE pi.ImportId = :import_id
         """,
-        {"import_id": import_id},
+        {"import_id": int(import_id)},
     )
 
     alerts: list[AlertDetail] = []
@@ -166,18 +169,24 @@ async def _check_import(location_id: str, import_id: str) -> CheckRecordResult:
 async def run_pattern_check(location_id: str) -> PatternCheckSummary | None:
     rows = fetch_all(
         """
-        SELECT DATE(created_at) AS day,
-               SUM(total_amount)       AS revenue,
-               COUNT(*)                AS order_count,
-               AVG(total_amount)       AS avg_order_value
-        FROM orders
-        WHERE location_id = :location_id
-          AND status = :order_status
-          AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-        GROUP BY DATE(created_at)
+        SELECT DATE(o.CreatedAt)     AS day,
+               SUM(o.TotalAmount)   AS revenue,
+               COUNT(*)             AS order_count,
+               AVG(o.TotalAmount)   AS avg_order_value
+        FROM Orders o
+        WHERE o.Status = :order_status
+          AND o.CreatedAt >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+          AND EXISTS (
+              SELECT 1 FROM OrderDetails od
+              JOIN SaleItems si ON si.SaleItemId = od.SaleItemId
+              JOIN Products  p  ON p.ProductId   = si.ProductId
+              WHERE od.OrderId = o.OrderId
+                AND p.BusinessLocationId = :location_id
+          )
+        GROUP BY DATE(o.CreatedAt)
         ORDER BY day
         """,
-        {"location_id": location_id, "order_status": OrderStatus.COMPLETED},
+        {"location_id": int(location_id), "order_status": OrderStatus.COMPLETED},
     )
 
     if len(rows) < MINIMUM_DAYS_TIER2:

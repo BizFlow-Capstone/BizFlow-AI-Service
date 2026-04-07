@@ -53,25 +53,29 @@ class ReorderSummary(BaseModel):
 
 async def run_reorder(location_id: str) -> ReorderSummary | None:
     # 1. Load sales history (last 30 days, product-level)
+    # Orders filter by location via: OrderDetails → SaleItems → Products.BusinessLocationId
     sales_rows = fetch_all(
         """
-        SELECT DATE(o.created_at) AS sale_date,
-               si.product_id,
-               SUM(si.quantity) AS qty_sold
-        FROM sale_items si
-        JOIN orders o ON si.order_id = o.id
-        WHERE o.location_id = :location_id
-          AND o.status = :order_status
-          AND o.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-        GROUP BY DATE(o.created_at), si.product_id
+        SELECT DATE(o.CreatedAt)  AS sale_date,
+               si.ProductId      AS product_id,
+               SUM(od.Quantity)  AS qty_sold
+        FROM OrderDetails od
+        JOIN Orders   o  ON od.OrderId   = o.OrderId
+        JOIN SaleItems si ON od.SaleItemId = si.SaleItemId
+        JOIN Products  p  ON si.ProductId  = p.ProductId
+        WHERE p.BusinessLocationId = :location_id
+          AND o.Status   = :order_status
+          AND o.CreatedAt >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+        GROUP BY DATE(o.CreatedAt), si.ProductId
         """,
-        {"location_id": location_id, "order_status": OrderStatus.COMPLETED},
+        {"location_id": int(location_id), "order_status": OrderStatus.COMPLETED},
     )
 
     if not sales_rows:
         return None
 
     df = pd.DataFrame(sales_rows)
+    df["product_id"] = df["product_id"].astype(str)   # normalise to str (MySQL returns BIGINT)
     df["qty_sold"] = pd.to_numeric(df["qty_sold"], downcast="float")
 
     unique_products = df["product_id"].unique().tolist()
@@ -85,14 +89,15 @@ async def run_reorder(location_id: str) -> ReorderSummary | None:
     # 2. Load current stock
     stock_rows = fetch_all(
         """
-        SELECT id AS product_id, stock_quantity
-        FROM products
-        WHERE location_id = :location_id
-          AND status = 'ACTIVE'
+        SELECT ProductId AS product_id, Stock AS stock_quantity
+        FROM Products
+        WHERE BusinessLocationId = :location_id
+          AND Status    = 'Active'
+          AND DeletedAt IS NULL
         """,
-        {"location_id": location_id},
+        {"location_id": int(location_id)},
     )
-    stock_map = {r["product_id"]: float(r["stock_quantity"] or 0) for r in stock_rows}
+    stock_map = {str(r["product_id"]): float(r["stock_quantity"] or 0) for r in stock_rows}
 
     # 3. Calculate per product
     suggestions: list[dict] = []
