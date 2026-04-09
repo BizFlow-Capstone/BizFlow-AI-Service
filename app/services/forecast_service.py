@@ -49,6 +49,10 @@ async def run_forecast(location_id: str) -> ForecastSummary | None:
     Run the full forecasting pipeline for one location.
     Returns None if there is insufficient data (skipped gracefully).
     """
+    if not location_id.isdigit():
+        logger.warning("Invalid location_id=%s passed to run_forecast", location_id)
+        return None
+
     # 1. Load data — đọc từ Revenues (gộp cả sale + manual, tránh double-count với Orders)
     # Revenues.BusinessLocationId trực tiếp, không cần join phức tạp
     rows = fetch_all(
@@ -120,7 +124,12 @@ async def run_forecast(location_id: str) -> ForecastSummary | None:
 # ---------------------------------------------------------------------------
 
 async def _generate_trend_note(df_30: pd.DataFrame) -> str:
-    csv_preview = df_30[["ds", "y"]].to_csv(index=False)
+    # Enforce numeric types before building CSV to prevent prompt injection
+    # via unexpected string values that could appear if column dtypes drift.
+    safe = df_30[["ds", "y"]].copy()
+    safe["ds"] = pd.to_datetime(safe["ds"]).dt.strftime("%Y-%m-%d")  # strict date format
+    safe["y"]  = pd.to_numeric(safe["y"], errors="coerce").fillna(0).round(0).astype(int)
+    csv_preview = safe.to_csv(index=False)
     system = (
         "Bạn là chuyên gia phân tích kinh doanh. "
         "Hãy viết 2–3 câu tiếng Việt đơn giản, dễ hiểu cho chủ hộ kinh doanh nhỏ "

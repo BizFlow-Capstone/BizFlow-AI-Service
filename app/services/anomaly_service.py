@@ -66,6 +66,9 @@ async def check_record_rules(
 
 
 async def _check_order(location_id: str, order_id: str) -> CheckRecordResult:
+    if not order_id.isdigit() or not location_id.isdigit():
+        logger.warning("Invalid order_id=%s or location_id=%s passed to _check_order", order_id, location_id)
+        return CheckRecordResult(alerts_created=0, has_critical=False, alerts=[])
     rows = fetch_all(
         """
         SELECT od.UnitPrice AS unit_price,
@@ -128,6 +131,9 @@ async def _check_order(location_id: str, order_id: str) -> CheckRecordResult:
 
 
 async def _check_import(location_id: str, import_id: str) -> CheckRecordResult:
+    if not import_id.isdigit() or not location_id.isdigit():
+        logger.warning("Invalid import_id=%s or location_id=%s passed to _check_import", import_id, location_id)
+        return CheckRecordResult(alerts_created=0, has_critical=False, alerts=[])
     rows = fetch_all(
         """
         SELECT pi.Quantity  AS quantity,
@@ -193,9 +199,15 @@ async def run_pattern_check(location_id: str) -> PatternCheckSummary | None:
         logger.info("Tier-2 anomaly skipped for location %s: insufficient data.", location_id)
         return None
 
+    # Only numeric/date fields are included — no free-text columns that could carry prompt injection.
     csv_data = "ngay,doanh_thu,so_don,gia_trung_binh\n"
     for r in rows:
-        csv_data += f"{r['day']},{r['revenue']:.0f},{r['order_count']},{r['avg_order_value']:.0f}\n"
+        csv_data += (
+            f"{str(r['day'])[:10]},"          # date truncated to YYYY-MM-DD, no extra chars
+            f"{float(r['revenue']):.0f},"
+            f"{int(r['order_count'])},"
+            f"{float(r['avg_order_value']):.0f}\n"
+        )
 
     system = (
         "Bạn là trợ lý phân tích dữ liệu kinh doanh. "
@@ -209,6 +221,16 @@ async def run_pattern_check(location_id: str) -> PatternCheckSummary | None:
 
     # Only persist if the LLM found something noteworthy
     if "bình thường" not in description.lower():
+        # Remove today's LLM_PATTERN alerts before writing to avoid duplicates on re-runs
+        execute_write(
+            """
+            DELETE FROM ai_anomaly_alerts
+            WHERE location_id = :location_id
+              AND tier = 'LLM_PATTERN'
+              AND DATE(generated_at) = CURDATE()
+            """,
+            {"location_id": location_id},
+        )
         alert = AlertDetail(
             alert_type="REVENUE_ANOMALY",
             severity="WARNING",
