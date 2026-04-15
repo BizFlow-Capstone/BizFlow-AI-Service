@@ -1,0 +1,94 @@
+# =============================================================================
+# CI/CD — BizFlow AI Service (bizflow-ai)
+# =============================================================================
+# Trigger: manual (Actions → Deploy AI → Run workflow → chọn branch → gõ 'true')
+# Steps:
+#   1. Build Docker image from Dockerfile
+#   2. Push to Docker Hub as :latest and :<git-sha>
+#   3. SSH to VPS → docker compose pull + up -d (--profile ai)
+#
+# Required GitHub Secrets (Settings → Secrets and variables → Actions):
+#   DOCKERHUB_USERNAME   — Docker Hub username
+#   DOCKERHUB_TOKEN      — Docker Hub access token (not password)
+#   VPS_HOST             — VPS IP or domain
+#   VPS_USER             — SSH user (usually root)
+#   VPS_SSH_KEY          — SSH private key (ed25519 recommended)
+#
+# Note: The compose files live in BizFlow-BE-Service repo on the VPS at
+#       /opt/bizflow/bizflow-app. Only the Docker image lives here.
+# =============================================================================
+
+name: Deploy AI to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Gõ 'true' để xác nhận deploy lên production"
+        required: true
+        type: string
+
+jobs:
+  build-and-push:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    if: ${{ inputs.confirm == 'true' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          dockerfile: Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/bizflow-ai:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/bizflow-ai:${{ github.sha }}
+          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/bizflow-ai:latest
+          cache-to: type=inline
+
+  deploy:
+    name: Deploy to VPS
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH and deploy
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/bizflow/bizflow-app
+
+            # Pull new image then restart only the AI service
+            docker compose \
+              -f docker-compose.yml \
+              -f docker-compose.prod.yml \
+              --env-file .env.prod \
+              --profile ai \
+              pull bizflow-ai
+
+            docker compose \
+              -f docker-compose.yml \
+              -f docker-compose.prod.yml \
+              --env-file .env.prod \
+              --profile ai \
+              up -d --no-build bizflow-ai
+
+            # Clean up dangling images to save disk space
+            docker image prune -f
