@@ -24,7 +24,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: "Gõ 'true' để xác nhận deploy lên production"
+        description: "Type 'true' to confirm deploying to production"
         required: true
         type: string
 
@@ -32,7 +32,7 @@ jobs:
   build-and-push:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
-    if: ${{ inputs.confirm == 'true' }}
+    if: ${{ inputs.confirm == 'true' && github.ref_name == 'deployment' }}
 
     steps:
       - name: Checkout code
@@ -63,6 +63,7 @@ jobs:
     name: Deploy to VPS
     needs: build-and-push
     runs-on: ubuntu-latest
+    if: ${{ github.ref_name == 'deployment' }}
 
     steps:
       - name: SSH and deploy
@@ -74,6 +75,11 @@ jobs:
           script: |
             set -e
             cd /opt/bizflow/bizflow-app
+
+            # Ensure compose files come from deployment branch
+            git fetch origin deployment
+            git checkout deployment
+            git reset --hard origin/deployment
 
             # Pull new image then restart only the AI service
             docker compose \
