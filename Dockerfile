@@ -23,7 +23,8 @@ WORKDIR /app
 
 # ffmpeg: converts any incoming audio format (AMR, 3GPP, AAC, WebM, ...)
 # to a universally-supported WAV before passing to Google STT / Whisper.
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+# curl: required by docker-compose healthcheck probe.
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy installed packages from builder
