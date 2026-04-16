@@ -103,6 +103,10 @@ jobs:
               run --rm -T --no-deps bizflow-ai \
               alembic upgrade head
 
+            # Apply any pending BE SQL migrations that were deferred because AI tables
+            # did not exist yet (e.g. migration 108 seeds into ai_* tables).
+            bash docker/scripts/run-migrations.sh
+
             docker compose \
               -f docker-compose.yml \
               -f docker-compose.prod.yml \
