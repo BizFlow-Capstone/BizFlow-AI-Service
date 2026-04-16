@@ -20,6 +20,9 @@
 
 name: Deploy AI to Production
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   workflow_dispatch:
     inputs:
@@ -89,6 +92,16 @@ jobs:
               --env-file .env.prod \
               --profile ai \
               pull bizflow-ai
+
+            # Ensure AI schema is up to date before restarting the AI service.
+            docker compose \
+              -f docker-compose.yml \
+              -f docker-compose.prod.yml \
+              -f docker-compose.vps.yml \
+              --env-file .env.prod \
+              --profile ai \
+              run --rm -T --no-deps bizflow-ai \
+              alembic upgrade head
 
             docker compose \
               -f docker-compose.yml \
