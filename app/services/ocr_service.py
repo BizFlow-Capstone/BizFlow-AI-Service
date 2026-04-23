@@ -41,6 +41,7 @@ class PurchaseInvoiceItem(BaseModel):
 
 class PurchaseInvoiceResult(BaseModel):
     supplier_name: str | None = None
+    invoice_number: str | None = None  # số hiệu chứng từ → DocumentNumber trên Cost / Import
     invoice_date: str | None = None
     items: list[PurchaseInvoiceItem]
     total_amount: float | None = None
@@ -75,8 +76,9 @@ Nhiệm vụ: trích xuất thông tin từ ảnh hóa đơn (hóa đơn đỏ t
 
 Output format:
 {
-  "supplier_name": "<tên nhà cung cấp hoặc null>",
-  "invoice_date":  "<YYYY-MM-DD hoặc null>",
+  "supplier_name":  "<tên nhà cung cấp hoặc null>",
+  "invoice_number": "<số hiệu chứng từ / số hóa đơn hoặc null>",
+  "invoice_date":   "<YYYY-MM-DD hoặc null>",
   "items": [
     {
       "product_name": "<tên sản phẩm>",
@@ -90,6 +92,7 @@ Output format:
 }
 
 Quy tắc:
+- "invoice_number": số hiệu chứng từ thường in ở đầu hóa đơn, ví dụ "0001234", "PN-2026-001", "01GTKT0/001". Lấy nguyên chuỗi ký tự như trên hóa đơn, không thêm bớt.
 - Số tiền trên hóa đơn Việt Nam dùng dấu chấm (.) là phân cách hàng nghìn, KHÔNG phải dấu thập phân. Ví dụ: "5.144.940" = 5144940, "76.258.490" = 76258490. Trả về giá trị nguyên (integer), KHÔNG có phần thập phân.
 - confidence = "high"   nếu đọc rõ ràng, tổng tiền khớp với items.
 - confidence = "medium" nếu thiếu một số trường nhưng vẫn đọc được items.
@@ -170,6 +173,7 @@ def _parse_purchase_invoice(raw: str) -> PurchaseInvoiceResult:
         items = [PurchaseInvoiceItem(**item) for item in data.get("items", [])]
         return PurchaseInvoiceResult(
             supplier_name=data.get("supplier_name"),
+            invoice_number=data.get("invoice_number"),
             invoice_date=data.get("invoice_date"),
             items=items,
             total_amount=data.get("total_amount"),

@@ -54,28 +54,62 @@ async def transcribe(audio_bytes: bytes, mime_type: str = "audio/webm") -> str:
     if not audio_bytes:
         raise STTError("Audio rỗng, không thể xử lý nhận dạng giọng nói.")
 
+    # ── Provider selection log (debug config issues quickly) ──────────────────
+    _google_ready = bool(settings.google_application_credentials and settings.google_cloud_project)
+    if _google_ready:
+        logger.info(
+            "STT provider selection: GOOGLE_STT_V2 | project=%s | credentials=%s",
+            settings.google_cloud_project,
+            settings.google_application_credentials,
+        )
+    else:
+        logger.warning(
+            "STT provider selection: WHISPER "
+            "(Google STT chưa cấu hình — "
+            "GOOGLE_APPLICATION_CREDENTIALS=%r | GOOGLE_CLOUD_PROJECT=%r)",
+            settings.google_application_credentials or "(empty)",
+            settings.google_cloud_project or "(empty)",
+        )
+
     # Convert all formats (AMR/Android, AAC/iPhone, 3GPP, WebM, ...) to
     # 16 kHz mono WAV so both Google STT v2 and Whisper receive a format
     # they universally support — no more per-format codec mapping needed.
     audio_bytes = _convert_audio_to_wav(audio_bytes, normalized_mime_type)
 
-    if settings.google_application_credentials and settings.google_cloud_project:
+    # Warn if audio likely exceeds Google STT Sync limit (~60 s inline)
+    # 16kHz * 16-bit * mono = 32 000 bytes/s  →  60 s ≈ 1.9 MB WAV
+    _GOOGLE_SYNC_LIMIT_BYTES = 1_900_000
+    if _google_ready and len(audio_bytes) > _GOOGLE_SYNC_LIMIT_BYTES:
+        estimated_seconds = len(audio_bytes) / 32_000
+        logger.warning(
+            "Audio dài ước tính %.0fs (>60s) — Google STT Sync có thể fail, "
+            "sẽ tự động fallback sang Whisper.",
+            estimated_seconds,
+        )
+
+    if _google_ready:
         try:
             transcript = await _transcribe_google_v2(audio_bytes)
             if transcript.strip():
+                logger.info(
+                    "✓ STT used: GOOGLE_STT_V2 | chars=%d", len(transcript)
+                )
                 return transcript
             # Google returned empty (no speech detected) — fall through to Whisper
-            logger.warning("Google STT v2 returned empty transcript — falling back to Whisper.")
+            logger.warning("Google STT v2 trả transcript rỗng — falling back to Whisper.")
         except Exception as exc:
             logger.warning(
                 "Google STT v2 failed (%s) — falling back to Whisper.", exc, exc_info=True
             )
 
-    return await _transcribe_whisper(
+    logger.info("STT falling through to WHISPER")
+    transcript = await _transcribe_whisper(
         audio_bytes,
         "audio/wav",
         source_mime_type=normalized_mime_type,
     )
+    logger.info("✓ STT used: WHISPER | chars=%d", len(transcript))
+    return transcript
 
 
 # ---------------------------------------------------------------------------

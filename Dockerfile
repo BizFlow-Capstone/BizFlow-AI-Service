@@ -40,8 +40,10 @@ ENV PATH="/venv/bin:$PATH"
 COPY . .
 
 # Sentence-transformers model will be downloaded on first run and cached here
-ENV TRANSFORMERS_CACHE=/app/.cache/huggingface
 ENV HF_HOME=/app/.cache/huggingface
+
+# Reduce noisy runtime logs from Chroma telemetry in production.
+ENV ANONYMIZED_TELEMETRY=False
 
 # ChromaDB persistence directory
 ENV CHROMA_PERSIST_DIR=/app/chroma_data

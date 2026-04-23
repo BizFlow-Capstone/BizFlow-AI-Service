@@ -54,14 +54,18 @@ class DraftOrderResult(BaseModel):
 # ---------------------------------------------------------------------------
 
 _SYSTEM_PROMPT = """Bạn là trợ lý nhận đơn hàng cho hộ kinh doanh nhỏ ở Việt Nam.
-Nhiệm vụ: từ câu nói của chủ shop, trích xuất thông tin đơn hàng thành JSON.
+Nhiệm vụ: từ câu nói hoặc đoạn hội thoại giữa chủ shop và khách hàng, trích xuất các mặt hàng đã CHỐT mua thành JSON.
 
-Quy tắc:
-- Chỉ trả về JSON hợp lệ, không giải thích thêm.
-- Nếu không xác định được thông tin, để null.
+Quy tắc xử lý hội thoại:
+- Chỉ lấy các mặt hàng đã được XÁC NHẬN mua, bỏ qua câu hỏi thăm dò giá, hỏi còn hàng không, hoặc món bị hủy/từ chối.
+- Nếu cùng 1 sản phẩm được đề cập nhiều lần với số lượng khác nhau, lấy số lượng CUỐI CÙNG được chốt.
+- Bỏ qua các câu như "giá bao nhiêu?", "có không?", "loại nào?", "thôi khỏi", "không cần".
 - "is_debt" là true nếu có từ "nợ", "ghi sổ", "chịu", "thiếu tiền".
+- "customer_name" lấy từ tên khách được nhắc đến trong hội thoại (nếu có).
 - "product_id" và "sale_item_id" chỉ điền nếu tìm được sản phẩm + đơn vị bán khớp trong danh sách catalog.
-- Chọn "sale_item_id" dựa trên đơn vị tính ("unit") mà chủ shop nói.
+- Chọn "sale_item_id" dựa trên đơn vị tính ("unit") mà khách hoặc chủ shop xác nhận.
+- Nếu không xác định được thông tin, để null.
+- Chỉ trả về JSON hợp lệ, không giải thích thêm.
 
 Output format:
 {
@@ -104,8 +108,8 @@ async def process_draft_order(
     catalog_context = _format_catalog(matched_products, sale_items_map)
     user_prompt = (
         f"Danh sách sản phẩm trong kho:\n{catalog_context}\n\n"
-        f"Câu đặt hàng: \"{transcript}\"\n\n"
-        "Trích xuất đơn hàng theo format JSON đã quy định."
+        f"Nội dung hội thoại/câu đặt hàng:\n\"\"\"\n{transcript}\n\"\"\"\n\n"
+        "Trích xuất các mặt hàng đã chốt mua theo format JSON đã quy định."
     )
 
     raw_json = await llm.chat(
