@@ -14,9 +14,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-# Install CPU-only PyTorch first to prevent sentence-transformers from
-# pulling in the default CUDA build (~1.5 GB larger than the CPU variant).
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+# Install CPU-only PyTorch first (into /install) to prevent sentence-transformers
+# from pulling in the default CUDA build (~1.5 GB larger than the CPU variant).
+RUN pip install --no-cache-dir --prefix=/install torch --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 # ---------- runtime stage ----------------------------------------------------
