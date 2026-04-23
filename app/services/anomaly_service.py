@@ -57,11 +57,13 @@ class PatternCheckSummary(BaseModel):
 
 async def check_record_rules(
     location_id: str,
-    record_type: Literal["order", "import"],
+    record_type: Literal["order", "import", "revenue"],
     record_id: str,
 ) -> CheckRecordResult:
     if record_type == "order":
         return await _check_order(location_id, record_id)
+    if record_type == "revenue":
+        return await _check_revenue(location_id, record_id)
     return await _check_import(location_id, record_id)
 
 
@@ -126,6 +128,59 @@ async def _check_order(location_id: str, order_id: str) -> CheckRecordResult:
 
 
     _write_alerts(location_id, order_id, alerts, tier="RULE_BASED")
+    has_critical = any(a.severity == "CRITICAL" for a in alerts)
+    return CheckRecordResult(alerts_created=len(alerts), has_critical=has_critical, alerts=alerts)
+
+
+async def _check_revenue(location_id: str, revenue_id: str) -> CheckRecordResult:
+    if not revenue_id.isdigit() or not location_id.isdigit():
+        logger.warning("Invalid revenue_id=%s or location_id=%s passed to _check_revenue", revenue_id, location_id)
+        return CheckRecordResult(alerts_created=0, has_critical=False, alerts=[])
+    rows = fetch_all(
+        """
+        SELECT r.Amount AS amount,
+               (SELECT AVG(r2.Amount)
+                FROM Revenues r2
+                WHERE r2.BusinessLocationId = :location_id
+                  AND r2.DeletedAt IS NULL
+                  AND r2.RevenueDate >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
+                  AND r2.RevenueId != :revenue_id
+               ) AS avg_amount
+        FROM Revenues r
+        WHERE r.RevenueId = :revenue_id
+          AND r.DeletedAt IS NULL
+        """,
+        {"revenue_id": int(revenue_id), "location_id": int(location_id)},
+    )
+
+    if not rows:
+        return CheckRecordResult(alerts_created=0, has_critical=False, alerts=[])
+
+    alerts: list[AlertDetail] = []
+    row = rows[0]
+    amount = float(row["amount"] or 0)
+    avg_amount = float(row["avg_amount"]) if row["avg_amount"] else None
+
+    if amount == 0:
+        alerts.append(AlertDetail(
+            alert_type="DATA_QUALITY",
+            severity="CRITICAL",
+            description="Doanh thu = 0đ. Vui lòng kiểm tra lại.",
+        ))
+
+    if avg_amount and avg_amount > 0 and amount > 0:
+        ratio = amount / avg_amount
+        if ratio > 10.0:
+            alerts.append(AlertDetail(
+                alert_type="DATA_QUALITY",
+                severity="WARNING",
+                description=(
+                    f"Doanh thu ({amount:,.0f}đ) cao bất thường so với "
+                    f"mức trung bình 90 ngày ({avg_amount:,.0f}đ). Kiểm tra lại."
+                ),
+            ))
+
+    _write_alerts(location_id, revenue_id, alerts, tier="RULE_BASED")
     has_critical = any(a.severity == "CRITICAL" for a in alerts)
     return CheckRecordResult(alerts_created=len(alerts), has_critical=has_critical, alerts=alerts)
 
