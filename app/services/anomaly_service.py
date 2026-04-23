@@ -100,18 +100,20 @@ async def _check_order(location_id: str, order_id: str) -> CheckRecordResult:
         quantity   = float(row["quantity"] or 0)
         avg_price  = float(row["avg_price"] or 0) if row["avg_price"] else None
 
+        prefix = f"Đơn hàng #{order_id}: "
+
         if unit_price == 0:
             alerts.append(AlertDetail(
                 alert_type="DATA_QUALITY",
                 severity="CRITICAL",
-                description="Phát hiện đơn hàng có giá bán = 0đ. Vui lòng kiểm tra lại.",
+                description=f"{prefix}Phát hiện giá bán = 0đ. Vui lòng kiểm tra lại.",
             ))
 
         if quantity <= 0:
             alerts.append(AlertDetail(
                 alert_type="DATA_QUALITY",
                 severity="CRITICAL",
-                description="Số lượng sản phẩm phải lớn hơn 0.",
+                description=f"{prefix}Số lượng sản phẩm phải lớn hơn 0.",
             ))
 
         if avg_price and avg_price > 0 and unit_price > 0:
@@ -121,7 +123,7 @@ async def _check_order(location_id: str, order_id: str) -> CheckRecordResult:
                     alert_type="DATA_QUALITY",
                     severity="WARNING",
                     description=(
-                        f"Giá bán ({unit_price:,.0f}đ) chênh lệch nhiều so với "
+                        f"{prefix}Giá bán ({unit_price:,.0f}đ) chênh lệch nhiều so với "
                         f"giá trung bình ({avg_price:,.0f}đ). Kiểm tra lại."
                     ),
                 ))
@@ -161,21 +163,32 @@ async def _check_revenue(location_id: str, revenue_id: str) -> CheckRecordResult
     amount = float(row["amount"] or 0)
     avg_amount = float(row["avg_amount"]) if row["avg_amount"] else None
 
+    prefix = f"Doanh thu #{revenue_id}: "
+
     if amount == 0:
         alerts.append(AlertDetail(
             alert_type="DATA_QUALITY",
             severity="CRITICAL",
-            description="Doanh thu = 0đ. Vui lòng kiểm tra lại.",
+            description=f"{prefix}Số tiền = 0đ. Vui lòng kiểm tra lại.",
         ))
 
     if avg_amount and avg_amount > 0 and amount > 0:
         ratio = amount / avg_amount
-        if ratio > 10.0:
+        if ratio > 100.0:
+            alerts.append(AlertDetail(
+                alert_type="DATA_QUALITY",
+                severity="CRITICAL",
+                description=(
+                    f"{prefix}Số tiền ({amount:,.0f}đ) cao bất thường gấp {ratio:.0f} lần "
+                    f"mức trung bình 90 ngày ({avg_amount:,.0f}đ). Có thể là lỗi nhập liệu."
+                ),
+            ))
+        elif ratio > 10.0:
             alerts.append(AlertDetail(
                 alert_type="DATA_QUALITY",
                 severity="WARNING",
                 description=(
-                    f"Doanh thu ({amount:,.0f}đ) cao bất thường so với "
+                    f"{prefix}Số tiền ({amount:,.0f}đ) cao bất thường so với "
                     f"mức trung bình 90 ngày ({avg_amount:,.0f}đ). Kiểm tra lại."
                 ),
             ))
@@ -201,21 +214,23 @@ async def _check_import(location_id: str, import_id: str) -> CheckRecordResult:
 
     alerts: list[AlertDetail] = []
     for row in rows:
-        quantity     = float(row["quantity"] or 0)
+        quantity      = float(row["quantity"] or 0)
         cost_per_unit = float(row["cost_per_unit"] or 0)
+
+        prefix = f"Phiếu nhập #{import_id}: "
 
         if quantity <= 0:
             alerts.append(AlertDetail(
                 alert_type="DATA_QUALITY",
                 severity="CRITICAL",
-                description="Số lượng nhập hàng phải lớn hơn 0.",
+                description=f"{prefix}Số lượng nhập hàng phải lớn hơn 0.",
             ))
 
         if cost_per_unit == 0:
             alerts.append(AlertDetail(
                 alert_type="DATA_QUALITY",
                 severity="WARNING",
-                description="Đơn giá nhập hàng = 0đ. Kiểm tra lại phiếu nhập.",
+                description=f"{prefix}Đơn giá nhập hàng = 0đ. Kiểm tra lại phiếu nhập.",
             ))
 
     _write_alerts(location_id, import_id, alerts, tier="RULE_BASED")
@@ -228,6 +243,55 @@ async def _check_import(location_id: str, import_id: str) -> CheckRecordResult:
 # ---------------------------------------------------------------------------
 
 async def run_pattern_check(location_id: str) -> PatternCheckSummary | None:
+    total_alerts = 0
+
+    # --- Tier 2a: Rule-based revenue spike detection (nightly sweep on today's revenues) ---
+    spike_rows = fetch_all(
+        """
+        SELECT r.RevenueId AS revenue_id,
+               r.Amount    AS amount,
+               (SELECT AVG(r2.Amount)
+                FROM Revenues r2
+                WHERE r2.BusinessLocationId = :location_id
+                  AND r2.DeletedAt IS NULL
+                  AND r2.RevenueDate >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
+                  AND r2.RevenueId != r.RevenueId
+               ) AS avg_90d
+        FROM Revenues r
+        WHERE r.BusinessLocationId = :location_id
+          AND r.DeletedAt IS NULL
+          AND r.RevenueDate = CURDATE()
+        """,
+        {"location_id": int(location_id)},
+    )
+    for row in spike_rows:
+        amount = float(row["amount"] or 0)
+        avg_90d = float(row["avg_90d"]) if row["avg_90d"] else None
+        if avg_90d and avg_90d > 0 and amount > 0:
+            ratio = amount / avg_90d
+            if ratio > 100.0:
+                severity = "CRITICAL"
+                desc = (
+                    f"Doanh thu #{row['revenue_id']}: Số tiền ({amount:,.0f}đ) cao bất thường gấp {ratio:.0f} lần "
+                    f"mức trung bình 90 ngày ({avg_90d:,.0f}đ). Có thể là lỗi nhập liệu."
+                )
+            elif ratio > 10.0:
+                severity = "WARNING"
+                desc = (
+                    f"Doanh thu #{row['revenue_id']}: Số tiền ({amount:,.0f}đ) cao bất thường so với "
+                    f"mức trung bình 90 ngày ({avg_90d:,.0f}đ). Kiểm tra lại."
+                )
+            else:
+                continue
+            _write_alerts(
+                location_id,
+                str(row["revenue_id"]),
+                [AlertDetail(alert_type="REVENUE_SPIKE", severity=severity, description=desc)],
+                tier="RULE_BASED",
+            )
+            total_alerts += 1
+
+    # --- Tier 2b: LLM order pattern summary ---
     rows = fetch_all(
         """
         SELECT DATE(o.CreatedAt)     AS day,
@@ -251,8 +315,8 @@ async def run_pattern_check(location_id: str) -> PatternCheckSummary | None:
     )
 
     if len(rows) < MINIMUM_DAYS_TIER2:
-        logger.info("Tier-2 anomaly skipped for location %s: insufficient data.", location_id)
-        return None
+        logger.info("Tier-2 anomaly skipped for location %s: insufficient order data for LLM.", location_id)
+        return PatternCheckSummary(location_id=location_id, alerts_created=total_alerts)
 
     # Only numeric/date fields are included — no free-text columns that could carry prompt injection.
     csv_data = "ngay,doanh_thu,so_don,gia_trung_binh\n"
@@ -292,9 +356,9 @@ async def run_pattern_check(location_id: str) -> PatternCheckSummary | None:
             description=description,
         )
         _write_alerts(location_id, None, [alert], tier="LLM_PATTERN")
-        return PatternCheckSummary(location_id=location_id, alerts_created=1)
+        total_alerts += 1
 
-    return PatternCheckSummary(location_id=location_id, alerts_created=0)
+    return PatternCheckSummary(location_id=location_id, alerts_created=total_alerts)
 
 
 # ---------------------------------------------------------------------------
