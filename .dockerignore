@@ -83,3 +83,27 @@ TestResults/
 coverage/
 *.coverage
 *.coveragexml
+
+# ==========================================
+# Python
+# ==========================================
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# ==========================================
+# AI Runtime Data (mounted as volumes at runtime)
+# ==========================================
+chroma_data/
+.cache/
+credentials/
+
+# ==========================================
+# Docs
+# ==========================================
+docs/
+migrations/
