@@ -94,11 +94,24 @@ async def process_draft_order(
         return DraftOrderResult(items=[], raw_transcript="", confidence="low")
 
     # Step 2: RAG — find matching products in catalog
+    # Embedding models have an effective token limit (~256 tokens / ~500 chars).
+    # For long conversations, truncating to 500 chars gives better semantic match
+    # quality than passing the entire transcript which gets silently truncated anyway.
+    vector_query = transcript[:500] if len(transcript) > 500 else transcript
     matched_products = await vector_store.query_products(
         location_id=location_id,
-        query_text=transcript,
-        top_k=5,
+        query_text=vector_query,
+        top_k=8,  # higher recall for conversations that mention multiple products
     )
+
+    if not matched_products:
+        logger.warning(
+            "Vector store returned 0 products for location %s — "
+            "collection may be empty (no products synced) or query '%s...' had no match. "
+            "LLM will have no catalog context → items will not be matched.",
+            location_id,
+            transcript[:80],
+        )
 
     # Step 3: DB enrich — fetch SaleItems + active prices for each matched product
     product_ids = [p["product_id"] for p in matched_products if p.get("product_id")]
