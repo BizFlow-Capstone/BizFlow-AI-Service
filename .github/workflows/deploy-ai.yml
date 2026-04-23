@@ -115,5 +115,6 @@ jobs:
               --profile ai \
               up -d --no-build bizflow-ai
 
-            # Clean up dangling images to save disk space
-            docker image prune -f
+            # Clean up unused images, stopped containers, build cache, unused networks
+            # --volumes is intentionally omitted to preserve MySQL/app data volumes
+            docker system prune -af
