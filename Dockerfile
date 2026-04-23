@@ -14,10 +14,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-# Install CPU-only PyTorch first (into /install) to prevent sentence-transformers
-# from pulling in the default CUDA build (~1.5 GB larger than the CPU variant).
-RUN pip install --no-cache-dir --prefix=/install torch --index-url https://download.pytorch.org/whl/cpu
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+# Use a virtualenv so pip properly tracks installed packages between steps.
+# This prevents sentence-transformers from re-pulling the CUDA torch build
+# (default on PyPI, ~1.7 GB) after we explicitly install the CPU-only wheel.
+RUN python -m venv /venv
+RUN /venv/bin/pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+RUN /venv/bin/pip install --no-cache-dir -r requirements.txt
 
 # ---------- runtime stage ----------------------------------------------------
 FROM python:3.12-slim
@@ -31,7 +33,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy installed packages from builder
-COPY --from=builder /install /usr/local
+COPY --from=builder /venv /venv
+ENV PATH="/venv/bin:$PATH"
 
 # Copy application source
 COPY . .
