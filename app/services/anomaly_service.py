@@ -38,6 +38,7 @@ class AlertDetail(BaseModel):
     alert_type: str
     severity: str
     description: str
+    record_type: str | None = None  # order | revenue | import | None (LLM_PATTERN)
 
 
 class CheckRecordResult(BaseModel):
@@ -129,7 +130,7 @@ async def _check_order(location_id: str, order_id: str) -> CheckRecordResult:
                 ))
 
 
-    _write_alerts(location_id, order_id, alerts, tier="RULE_BASED")
+    _write_alerts(location_id, order_id, alerts, tier="RULE_BASED", record_type="order")
     has_critical = any(a.severity == "CRITICAL" for a in alerts)
     return CheckRecordResult(alerts_created=len(alerts), has_critical=has_critical, alerts=alerts)
 
@@ -193,7 +194,7 @@ async def _check_revenue(location_id: str, revenue_id: str) -> CheckRecordResult
                 ),
             ))
 
-    _write_alerts(location_id, revenue_id, alerts, tier="RULE_BASED")
+    _write_alerts(location_id, revenue_id, alerts, tier="RULE_BASED", record_type="revenue")
     has_critical = any(a.severity == "CRITICAL" for a in alerts)
     return CheckRecordResult(alerts_created=len(alerts), has_critical=has_critical, alerts=alerts)
 
@@ -233,7 +234,7 @@ async def _check_import(location_id: str, import_id: str) -> CheckRecordResult:
                 description=f"{prefix}Đơn giá nhập hàng = 0đ. Kiểm tra lại phiếu nhập.",
             ))
 
-    _write_alerts(location_id, import_id, alerts, tier="RULE_BASED")
+    _write_alerts(location_id, import_id, alerts, tier="RULE_BASED", record_type="import")
     has_critical = any(a.severity == "CRITICAL" for a in alerts)
     return CheckRecordResult(alerts_created=len(alerts), has_critical=has_critical, alerts=alerts)
 
@@ -288,6 +289,7 @@ async def run_pattern_check(location_id: str) -> PatternCheckSummary | None:
                 str(row["revenue_id"]),
                 [AlertDetail(alert_type="REVENUE_SPIKE", severity=severity, description=desc)],
                 tier="RULE_BASED",
+                record_type="revenue",
             )
             total_alerts += 1
 
@@ -355,7 +357,7 @@ async def run_pattern_check(location_id: str) -> PatternCheckSummary | None:
             severity="WARNING",
             description=description,
         )
-        _write_alerts(location_id, None, [alert], tier="LLM_PATTERN")
+        _write_alerts(location_id, None, [alert], tier="LLM_PATTERN", record_type=None)
         total_alerts += 1
 
     return PatternCheckSummary(location_id=location_id, alerts_created=total_alerts)
@@ -370,16 +372,17 @@ def _write_alerts(
     reference_id: str | None,
     alerts: list[AlertDetail],
     tier: Literal["RULE_BASED", "LLM_PATTERN"],
+    record_type: Literal["order", "revenue", "import"] | None = None,
 ) -> None:
     for alert in alerts:
         execute_write(
             """
             INSERT INTO ai_anomaly_alerts
                 (id, location_id, alert_type, severity, tier, reference_date,
-                 description, reference_id, is_acknowledged, generated_at)
+                 description, reference_id, record_type, is_acknowledged, generated_at)
             VALUES
                 (:id, :location_id, :alert_type, :severity, :tier, CURDATE(),
-                 :description, :reference_id, FALSE, NOW())
+                 :description, :reference_id, :record_type, FALSE, NOW())
             """,
             {
                 "id":           str(uuid.uuid4()),
@@ -389,5 +392,6 @@ def _write_alerts(
                 "tier":         tier,
                 "description":  alert.description,
                 "reference_id": reference_id,
+                "record_type":  record_type,
             },
         )
