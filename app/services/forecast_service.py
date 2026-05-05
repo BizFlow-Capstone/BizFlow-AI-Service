@@ -90,20 +90,26 @@ async def run_forecast(location_id: str) -> ForecastSummary | None:
     residuals = df["y"] - ema
     sigma = float(residuals.iloc[-14:].std())
 
+    # Linear trend from last 7 EMA values so each forecast day differs
+    recent_ema = ema.iloc[-7:].values
+    trend_slope = float(np.polyfit(np.arange(len(recent_ema)), recent_ema, 1)[0])
+
     last_date: date = df["ds"].iloc[-1].date()
     forecast_rows: list[dict] = []
     last_ema = float(ema.iloc[-1])
 
     for i in range(1, FORECAST_HORIZON + 1):
         forecast_date = last_date + timedelta(days=i)
-        predicted = max(0.0, last_ema)
+        predicted = max(0.0, last_ema + trend_slope * i)
+        # Confidence bounds widen with forecast horizon (sqrt scaling)
+        horizon_sigma = sigma * (i ** 0.5)
         forecast_rows.append({
             "id":                str(uuid.uuid4()),
             "location_id":       location_id,
             "forecast_date":     forecast_date.isoformat(),
             "predicted_revenue": round(predicted, 2),
-            "lower_bound":       round(max(0.0, predicted - sigma), 2),
-            "upper_bound":       round(predicted + sigma, 2),
+            "lower_bound":       round(max(0.0, predicted - horizon_sigma), 2),
+            "upper_bound":       round(predicted + horizon_sigma, 2),
         })
 
     # 4. GPT trend note (uses last 30 days as context)
