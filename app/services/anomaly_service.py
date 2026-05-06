@@ -146,15 +146,31 @@ async def _check_revenue(location_id: str, revenue_id: str) -> CheckRecordResult
         SELECT r.Amount      AS amount,
                r.RevenueDate AS revenue_date,
                r.Description AS description,
+               r.RevenueType AS revenue_type,
                (SELECT AVG(r2.Amount)
                 FROM Revenues r2
                 WHERE r2.BusinessLocationId = :location_id
+                  AND r2.RevenueType  = r.RevenueType
+                  AND r2.Status       = 'posted'
+                  AND r2.IsReversal   = 0
                   AND r2.CancelledAt IS NULL
                   AND r2.RevenueDate >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
-                  AND r2.RevenueId != :revenue_id
-               ) AS avg_amount
+                  AND r2.RevenueId   != :revenue_id
+               ) AS avg_amount,
+               (SELECT STDDEV(r2.Amount)
+                FROM Revenues r2
+                WHERE r2.BusinessLocationId = :location_id
+                  AND r2.RevenueType  = r.RevenueType
+                  AND r2.Status       = 'posted'
+                  AND r2.IsReversal   = 0
+                  AND r2.CancelledAt IS NULL
+                  AND r2.RevenueDate >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
+                  AND r2.RevenueId   != :revenue_id
+               ) AS std_amount
         FROM Revenues r
-        WHERE r.RevenueId = :revenue_id
+        WHERE r.RevenueId  = :revenue_id
+          AND r.Status    != 'cancelled'
+          AND r.IsReversal = 0
           AND r.CancelledAt IS NULL
         """,
         {"revenue_id": int(revenue_id), "location_id": int(location_id)},
@@ -165,12 +181,15 @@ async def _check_revenue(location_id: str, revenue_id: str) -> CheckRecordResult
 
     alerts: list[AlertDetail] = []
     row = rows[0]
-    amount      = float(row["amount"] or 0)
-    avg_amount  = float(row["avg_amount"]) if row["avg_amount"] else None
-    rev_date    = str(row["revenue_date"])[:10] if row["revenue_date"] else "không rõ ngày"
-    description = (row["description"] or "").strip()
+    amount       = float(row["amount"] or 0)
+    avg_amount   = float(row["avg_amount"]) if row["avg_amount"] else None
+    std_amount   = float(row["std_amount"]) if row["std_amount"] else None
+    rev_date     = str(row["revenue_date"])[:10] if row["revenue_date"] else "không rõ ngày"
+    description  = (row["description"] or "").strip()
+    revenue_type = row["revenue_type"] or "manual"
 
-    prefix = f"Doanh thu tự khai báo ngày {rev_date}, số tiền {amount:,.0f}đ"
+    type_label = "doanh thu đơn hàng" if revenue_type == "sale" else "doanh thu tự khai báo"
+    prefix = f"{type_label.capitalize()} ngày {rev_date}, số tiền {amount:,.0f}đ"
 
     if amount == 0:
         alerts.append(AlertDetail(
@@ -179,26 +198,27 @@ async def _check_revenue(location_id: str, revenue_id: str) -> CheckRecordResult
             description=f"{prefix}: số tiền = 0đ, vui lòng kiểm tra lại.",
         ))
 
-    if avg_amount and avg_amount > 0 and amount > 0:
-        ratio = amount / avg_amount
-        if ratio > 100.0:
-            alerts.append(AlertDetail(
-                alert_type="DATA_QUALITY",
-                severity="CRITICAL",
-                description=(
-                    f"{prefix}: cao bất thường gấp {ratio:.0f} lần "
-                    f"mức trung bình 90 ngày ({avg_amount:,.0f}đ). Có thể là lỗi nhập liệu."
-                ),
-            ))
-        elif ratio > 10.0:
-            alerts.append(AlertDetail(
-                alert_type="DATA_QUALITY",
-                severity="WARNING",
-                description=(
-                    f"{prefix}: cao bất thường so với "
-                    f"mức trung bình 90 ngày ({avg_amount:,.0f}đ). Kiểm tra lại."
-                ),
-            ))
+    if avg_amount and avg_amount > 0 and std_amount is not None and amount > 0:
+        z_score = (amount - avg_amount) / std_amount if std_amount > 0 else None
+        if z_score is not None:
+            if z_score > 5:
+                alerts.append(AlertDetail(
+                    alert_type="DATA_QUALITY",
+                    severity="CRITICAL",
+                    description=(
+                        f"{prefix}: cao bất thường so với mức trung bình 90 ngày "
+                        f"({avg_amount:,.0f}đ ± {std_amount:,.0f}đ). Có thể là lỗi nhập liệu."
+                    ),
+                ))
+            elif z_score > 3:
+                alerts.append(AlertDetail(
+                    alert_type="DATA_QUALITY",
+                    severity="WARNING",
+                    description=(
+                        f"{prefix}: cao hơn bình thường so với mức trung bình 90 ngày "
+                        f"({avg_amount:,.0f}đ ± {std_amount:,.0f}đ). Kiểm tra lại."
+                    ),
+                ))
 
     if not description:
         alerts.append(AlertDetail(
@@ -221,15 +241,31 @@ async def _check_cost(location_id: str, cost_id: str) -> CheckRecordResult:
         SELECT c.Amount      AS amount,
                c.CostDate    AS cost_date,
                c.Description AS description,
+               c.CostType    AS cost_type,
                (SELECT AVG(c2.Amount)
                 FROM Costs c2
                 WHERE c2.BusinessLocationId = :location_id
+                  AND c2.CostType    = c.CostType
+                  AND c2.Status      = 'posted'
+                  AND c2.IsReversal  = 0
                   AND c2.CancelledAt IS NULL
-                  AND c2.CostDate >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
-                  AND c2.CostId != :cost_id
-               ) AS avg_amount
+                  AND c2.CostDate   >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
+                  AND c2.CostId     != :cost_id
+               ) AS avg_amount,
+               (SELECT STDDEV(c2.Amount)
+                FROM Costs c2
+                WHERE c2.BusinessLocationId = :location_id
+                  AND c2.CostType    = c.CostType
+                  AND c2.Status      = 'posted'
+                  AND c2.IsReversal  = 0
+                  AND c2.CancelledAt IS NULL
+                  AND c2.CostDate   >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
+                  AND c2.CostId     != :cost_id
+               ) AS std_amount
         FROM Costs c
-        WHERE c.CostId = :cost_id
+        WHERE c.CostId     = :cost_id
+          AND c.Status    != 'cancelled'
+          AND c.IsReversal = 0
           AND c.CancelledAt IS NULL
         """,
         {"cost_id": int(cost_id), "location_id": int(location_id)},
@@ -242,10 +278,12 @@ async def _check_cost(location_id: str, cost_id: str) -> CheckRecordResult:
     row = rows[0]
     amount      = float(row["amount"] or 0)
     avg_amount  = float(row["avg_amount"]) if row["avg_amount"] else None
+    std_amount  = float(row["std_amount"]) if row["std_amount"] else None
     cost_date   = str(row["cost_date"])[:10] if row["cost_date"] else "không rõ ngày"
     description = (row["description"] or "").strip()
+    cost_type   = row["cost_type"] or "manual"
 
-    prefix = f"Chi phí tự khai báo ngày {cost_date}, số tiền {amount:,.0f}đ"
+    prefix = f"Chi phí ({cost_type}) ngày {cost_date}, số tiền {amount:,.0f}đ"
 
     if amount == 0:
         alerts.append(AlertDetail(
@@ -254,26 +292,27 @@ async def _check_cost(location_id: str, cost_id: str) -> CheckRecordResult:
             description=f"{prefix}: số tiền = 0đ, vui lòng kiểm tra lại.",
         ))
 
-    if avg_amount and avg_amount > 0 and amount > 0:
-        ratio = amount / avg_amount
-        if ratio > 100.0:
-            alerts.append(AlertDetail(
-                alert_type="DATA_QUALITY",
-                severity="CRITICAL",
-                description=(
-                    f"{prefix}: cao bất thường gấp {ratio:.0f} lần "
-                    f"mức trung bình 90 ngày ({avg_amount:,.0f}đ). Có thể là lỗi nhập liệu."
-                ),
-            ))
-        elif ratio > 10.0:
-            alerts.append(AlertDetail(
-                alert_type="DATA_QUALITY",
-                severity="WARNING",
-                description=(
-                    f"{prefix}: cao bất thường so với "
-                    f"mức trung bình 90 ngày ({avg_amount:,.0f}đ). Kiểm tra lại."
-                ),
-            ))
+    if avg_amount and avg_amount > 0 and std_amount is not None and amount > 0:
+        z_score = (amount - avg_amount) / std_amount if std_amount > 0 else None
+        if z_score is not None:
+            if z_score > 5:
+                alerts.append(AlertDetail(
+                    alert_type="DATA_QUALITY",
+                    severity="CRITICAL",
+                    description=(
+                        f"{prefix}: cao bất thường so với mức trung bình 90 ngày cùng loại "
+                        f"({avg_amount:,.0f}đ ± {std_amount:,.0f}đ). Có thể là lỗi nhập liệu."
+                    ),
+                ))
+            elif z_score > 3:
+                alerts.append(AlertDetail(
+                    alert_type="DATA_QUALITY",
+                    severity="WARNING",
+                    description=(
+                        f"{prefix}: cao hơn bình thường so với mức trung bình 90 ngày cùng loại "
+                        f"({avg_amount:,.0f}đ ± {std_amount:,.0f}đ). Kiểm tra lại."
+                    ),
+                ))
 
     if not description:
         alerts.append(AlertDetail(
@@ -337,38 +376,55 @@ async def run_pattern_check(location_id: str) -> PatternCheckSummary | None:
     # --- Tier 2a: Rule-based revenue spike detection (nightly sweep on today's revenues) ---
     spike_rows = fetch_all(
         """
-        SELECT r.RevenueId AS revenue_id,
-               r.Amount    AS amount,
+        SELECT r.RevenueId   AS revenue_id,
+               r.Amount      AS amount,
+               r.RevenueType AS revenue_type,
                (SELECT AVG(r2.Amount)
                 FROM Revenues r2
                 WHERE r2.BusinessLocationId = :location_id
+                  AND r2.RevenueType  = r.RevenueType
+                  AND r2.Status       = 'posted'
+                  AND r2.IsReversal   = 0
                   AND r2.CancelledAt IS NULL
                   AND r2.RevenueDate >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
-                  AND r2.RevenueId != r.RevenueId
-               ) AS avg_90d
+                  AND r2.RevenueId   != r.RevenueId
+               ) AS avg_90d,
+               (SELECT STDDEV(r2.Amount)
+                FROM Revenues r2
+                WHERE r2.BusinessLocationId = :location_id
+                  AND r2.RevenueType  = r.RevenueType
+                  AND r2.Status       = 'posted'
+                  AND r2.IsReversal   = 0
+                  AND r2.CancelledAt IS NULL
+                  AND r2.RevenueDate >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
+                  AND r2.RevenueId   != r.RevenueId
+               ) AS std_90d
         FROM Revenues r
         WHERE r.BusinessLocationId = :location_id
+          AND r.Status       = 'posted'
+          AND r.IsReversal   = 0
           AND r.CancelledAt IS NULL
-          AND r.RevenueDate = CURDATE()
+          AND r.RevenueDate  = CURDATE()
         """,
         {"location_id": int(location_id)},
     )
     for row in spike_rows:
-        amount = float(row["amount"] or 0)
+        amount  = float(row["amount"] or 0)
         avg_90d = float(row["avg_90d"]) if row["avg_90d"] else None
-        if avg_90d and avg_90d > 0 and amount > 0:
-            ratio = amount / avg_90d
-            if ratio > 100.0:
+        std_90d = float(row["std_90d"]) if row["std_90d"] else None
+        if avg_90d and avg_90d > 0 and std_90d and std_90d > 0 and amount > 0:
+            z_score = (amount - avg_90d) / std_90d
+            if z_score > 5:
                 severity = "CRITICAL"
                 desc = (
-                    f"Doanh thu #{row['revenue_id']}: Số tiền ({amount:,.0f}đ) cao bất thường gấp {ratio:.0f} lần "
-                    f"mức trung bình 90 ngày ({avg_90d:,.0f}đ). Có thể là lỗi nhập liệu."
+                    f"Doanh thu #{row['revenue_id']}: Số tiền ({amount:,.0f}đ) cao bất thường so với "
+                    f"mức trung bình 90 ngày ({avg_90d:,.0f}đ ± {std_90d:,.0f}đ). Có thể là lỗi nhập liệu."
                 )
-            elif ratio > 10.0:
+            elif z_score > 3:
                 severity = "WARNING"
                 desc = (
-                    f"Doanh thu #{row['revenue_id']}: Số tiền ({amount:,.0f}đ) cao bất thường so với "
-                    f"mức trung bình 90 ngày ({avg_90d:,.0f}đ). Kiểm tra lại."
+                    f"Doanh thu #{row['revenue_id']}: Số tiền ({amount:,.0f}đ) cao hơn bình thường so với "
+                    f"mức trung bình 90 ngày ({avg_90d:,.0f}đ ± {std_90d:,.0f}đ). Kiểm tra lại."
                 )
             else:
                 continue
