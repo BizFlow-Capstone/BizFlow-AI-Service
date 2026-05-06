@@ -21,7 +21,7 @@ openai==1.58.1
 google-cloud-speech==2.28.0
 
 # --- Vector store & embeddings (RAG for product catalog) ---------------------
-chromadb==0.5.23
+chromadb==0.6.3
 sentence-transformers==3.3.1
 rapidfuzz==3.10.1          # fuzzy fallback for STT tonal/diacritic errors
 
