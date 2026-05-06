@@ -20,7 +20,7 @@ router = APIRouter(dependencies=[Depends(verify_internal_secret)])
 
 class CheckRecordRequest(BaseModel):
     location_id: str
-    record_type: Literal["order", "import", "revenue"]
+    record_type: Literal["order", "import", "revenue", "cost"]
     record_id: str
 
 

@@ -58,13 +58,15 @@ class PatternCheckSummary(BaseModel):
 
 async def check_record_rules(
     location_id: str,
-    record_type: Literal["order", "import", "revenue"],
+    record_type: Literal["order", "import", "revenue", "cost"],
     record_id: str,
 ) -> CheckRecordResult:
     if record_type == "order":
         return await _check_order(location_id, record_id)
     if record_type == "revenue":
         return await _check_revenue(location_id, record_id)
+    if record_type == "cost":
+        return await _check_cost(location_id, record_id)
     return await _check_import(location_id, record_id)
 
 
@@ -141,7 +143,9 @@ async def _check_revenue(location_id: str, revenue_id: str) -> CheckRecordResult
         return CheckRecordResult(alerts_created=0, has_critical=False, alerts=[])
     rows = fetch_all(
         """
-        SELECT r.Amount AS amount,
+        SELECT r.Amount      AS amount,
+               r.RevenueDate AS revenue_date,
+               r.Description AS description,
                (SELECT AVG(r2.Amount)
                 FROM Revenues r2
                 WHERE r2.BusinessLocationId = :location_id
@@ -161,16 +165,18 @@ async def _check_revenue(location_id: str, revenue_id: str) -> CheckRecordResult
 
     alerts: list[AlertDetail] = []
     row = rows[0]
-    amount = float(row["amount"] or 0)
-    avg_amount = float(row["avg_amount"]) if row["avg_amount"] else None
+    amount      = float(row["amount"] or 0)
+    avg_amount  = float(row["avg_amount"]) if row["avg_amount"] else None
+    rev_date    = str(row["revenue_date"])[:10] if row["revenue_date"] else "không rõ ngày"
+    description = (row["description"] or "").strip()
 
-    prefix = f"Doanh thu #{revenue_id}: "
+    prefix = f"Doanh thu tự khai báo ngày {rev_date}, số tiền {amount:,.0f}đ"
 
     if amount == 0:
         alerts.append(AlertDetail(
             alert_type="DATA_QUALITY",
             severity="CRITICAL",
-            description=f"{prefix}Số tiền = 0đ. Vui lòng kiểm tra lại.",
+            description=f"{prefix}: số tiền = 0đ, vui lòng kiểm tra lại.",
         ))
 
     if avg_amount and avg_amount > 0 and amount > 0:
@@ -180,7 +186,7 @@ async def _check_revenue(location_id: str, revenue_id: str) -> CheckRecordResult
                 alert_type="DATA_QUALITY",
                 severity="CRITICAL",
                 description=(
-                    f"{prefix}Số tiền ({amount:,.0f}đ) cao bất thường gấp {ratio:.0f} lần "
+                    f"{prefix}: cao bất thường gấp {ratio:.0f} lần "
                     f"mức trung bình 90 ngày ({avg_amount:,.0f}đ). Có thể là lỗi nhập liệu."
                 ),
             ))
@@ -189,12 +195,94 @@ async def _check_revenue(location_id: str, revenue_id: str) -> CheckRecordResult
                 alert_type="DATA_QUALITY",
                 severity="WARNING",
                 description=(
-                    f"{prefix}Số tiền ({amount:,.0f}đ) cao bất thường so với "
+                    f"{prefix}: cao bất thường so với "
                     f"mức trung bình 90 ngày ({avg_amount:,.0f}đ). Kiểm tra lại."
                 ),
             ))
 
+    if not description:
+        alerts.append(AlertDetail(
+            alert_type="DATA_QUALITY",
+            severity="WARNING",
+            description=f"{prefix}: thiếu mô tả, khó đối soát về sau.",
+        ))
+
     _write_alerts(location_id, revenue_id, alerts, tier="RULE_BASED", record_type="revenue")
+    has_critical = any(a.severity == "CRITICAL" for a in alerts)
+    return CheckRecordResult(alerts_created=len(alerts), has_critical=has_critical, alerts=alerts)
+
+
+async def _check_cost(location_id: str, cost_id: str) -> CheckRecordResult:
+    if not cost_id.isdigit() or not location_id.isdigit():
+        logger.warning("Invalid cost_id=%s or location_id=%s passed to _check_cost", cost_id, location_id)
+        return CheckRecordResult(alerts_created=0, has_critical=False, alerts=[])
+    rows = fetch_all(
+        """
+        SELECT c.Amount      AS amount,
+               c.CostDate    AS cost_date,
+               c.Description AS description,
+               (SELECT AVG(c2.Amount)
+                FROM Costs c2
+                WHERE c2.BusinessLocationId = :location_id
+                  AND c2.CancelledAt IS NULL
+                  AND c2.CostDate >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
+                  AND c2.CostId != :cost_id
+               ) AS avg_amount
+        FROM Costs c
+        WHERE c.CostId = :cost_id
+          AND c.CancelledAt IS NULL
+        """,
+        {"cost_id": int(cost_id), "location_id": int(location_id)},
+    )
+
+    if not rows:
+        return CheckRecordResult(alerts_created=0, has_critical=False, alerts=[])
+
+    alerts: list[AlertDetail] = []
+    row = rows[0]
+    amount      = float(row["amount"] or 0)
+    avg_amount  = float(row["avg_amount"]) if row["avg_amount"] else None
+    cost_date   = str(row["cost_date"])[:10] if row["cost_date"] else "không rõ ngày"
+    description = (row["description"] or "").strip()
+
+    prefix = f"Chi phí tự khai báo ngày {cost_date}, số tiền {amount:,.0f}đ"
+
+    if amount == 0:
+        alerts.append(AlertDetail(
+            alert_type="DATA_QUALITY",
+            severity="CRITICAL",
+            description=f"{prefix}: số tiền = 0đ, vui lòng kiểm tra lại.",
+        ))
+
+    if avg_amount and avg_amount > 0 and amount > 0:
+        ratio = amount / avg_amount
+        if ratio > 100.0:
+            alerts.append(AlertDetail(
+                alert_type="DATA_QUALITY",
+                severity="CRITICAL",
+                description=(
+                    f"{prefix}: cao bất thường gấp {ratio:.0f} lần "
+                    f"mức trung bình 90 ngày ({avg_amount:,.0f}đ). Có thể là lỗi nhập liệu."
+                ),
+            ))
+        elif ratio > 10.0:
+            alerts.append(AlertDetail(
+                alert_type="DATA_QUALITY",
+                severity="WARNING",
+                description=(
+                    f"{prefix}: cao bất thường so với "
+                    f"mức trung bình 90 ngày ({avg_amount:,.0f}đ). Kiểm tra lại."
+                ),
+            ))
+
+    if not description:
+        alerts.append(AlertDetail(
+            alert_type="DATA_QUALITY",
+            severity="WARNING",
+            description=f"{prefix}: thiếu mô tả, khó đối soát về sau.",
+        ))
+
+    _write_alerts(location_id, cost_id, alerts, tier="RULE_BASED", record_type="cost")
     has_critical = any(a.severity == "CRITICAL" for a in alerts)
     return CheckRecordResult(alerts_created=len(alerts), has_critical=has_critical, alerts=alerts)
 
@@ -372,7 +460,7 @@ def _write_alerts(
     reference_id: str | None,
     alerts: list[AlertDetail],
     tier: Literal["RULE_BASED", "LLM_PATTERN"],
-    record_type: Literal["order", "revenue", "import"] | None = None,
+    record_type: Literal["order", "revenue", "import", "cost"] | None = None,
 ) -> None:
     for alert in alerts:
         execute_write(
