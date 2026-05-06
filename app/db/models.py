@@ -55,6 +55,7 @@ class AIAnomalyAlert(Base):
     reference_date: Mapped[date]     = mapped_column(Date, nullable=False)
     description: Mapped[str]         = mapped_column(Text, nullable=False)
     reference_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    record_type: Mapped[str | None]  = mapped_column(String(20), nullable=True)   # order | revenue | import | cost | None (LLM_PATTERN)
     is_acknowledged: Mapped[bool]    = mapped_column(Boolean, nullable=False, default=False)
     generated_at: Mapped[datetime]   = mapped_column(DateTime, nullable=False)
 

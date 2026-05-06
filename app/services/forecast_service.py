@@ -60,7 +60,7 @@ async def run_forecast(location_id: str) -> ForecastSummary | None:
         SELECT RevenueDate AS ds, SUM(Amount) AS y
         FROM Revenues
         WHERE BusinessLocationId = :location_id
-          AND DeletedAt IS NULL
+          AND CancelledAt IS NULL
           AND RevenueDate >= DATE_SUB(CURDATE(), INTERVAL 3 MONTH)
         GROUP BY RevenueDate
         ORDER BY ds

@@ -149,13 +149,13 @@ async def _check_revenue(location_id: str, revenue_id: str) -> CheckRecordResult
                (SELECT AVG(r2.Amount)
                 FROM Revenues r2
                 WHERE r2.BusinessLocationId = :location_id
-                  AND r2.DeletedAt IS NULL
+                  AND r2.CancelledAt IS NULL
                   AND r2.RevenueDate >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
                   AND r2.RevenueId != :revenue_id
                ) AS avg_amount
         FROM Revenues r
         WHERE r.RevenueId = :revenue_id
-          AND r.DeletedAt IS NULL
+          AND r.CancelledAt IS NULL
         """,
         {"revenue_id": int(revenue_id), "location_id": int(location_id)},
     )
@@ -342,13 +342,13 @@ async def run_pattern_check(location_id: str) -> PatternCheckSummary | None:
                (SELECT AVG(r2.Amount)
                 FROM Revenues r2
                 WHERE r2.BusinessLocationId = :location_id
-                  AND r2.DeletedAt IS NULL
+                  AND r2.CancelledAt IS NULL
                   AND r2.RevenueDate >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)
                   AND r2.RevenueId != r.RevenueId
                ) AS avg_90d
         FROM Revenues r
         WHERE r.BusinessLocationId = :location_id
-          AND r.DeletedAt IS NULL
+          AND r.CancelledAt IS NULL
           AND r.RevenueDate = CURDATE()
         """,
         {"location_id": int(location_id)},
